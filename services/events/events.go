@@ -46,6 +46,7 @@ type Notifier interface {
 
 type Handler struct {
 	DB       *platform.DB
+	Cmd      devices.Commander
 	Notifier Notifier
 	Log      *slog.Logger
 
@@ -57,6 +58,7 @@ func (h *Handler) Routes(mux *http.ServeMux, wrap func(http.Handler) http.Handle
 	mux.Handle("GET /v1/events", wrap(http.HandlerFunc(h.list)))
 	mux.Handle("GET /v1/events/stream", wrap(http.HandlerFunc(h.stream)))
 	mux.Handle("POST /v1/events/{device}/{edge}/ack", wrap(http.HandlerFunc(h.ack)))
+	mux.Handle("POST /v1/events/{device}/{edge}/retain", wrap(http.HandlerFunc(h.retain)))
 	mux.Handle("GET /v1/events/summary", wrap(http.HandlerFunc(h.summary)))
 	mux.Handle("GET /v1/alert-rules", wrap(http.HandlerFunc(h.listRules)))
 	mux.Handle("POST /v1/alert-rules", wrap(http.HandlerFunc(h.createRule)))
@@ -309,6 +311,45 @@ func (h *Handler) ack(w http.ResponseWriter, r *http.Request) {
 		platform.Fail(w, r, err)
 		return
 	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// retain locks an incident's recording on the device past the normal
+// retention period, as the regulation requires for reported incidents.
+func (h *Handler) retain(w http.ResponseWriter, r *http.Request) {
+	p := platform.PrincipalFrom(r.Context())
+	device, edge := r.PathValue("device"), r.PathValue("edge")
+	var in struct {
+		Keep   bool   `json:"keep"`
+		Reason string `json:"reason"`
+	}
+	if err := platform.Decode(r, &in); err != nil || in.Reason == "" {
+		platform.Fail(w, r, platform.Errorf(http.StatusBadRequest, "keep and reason are required"))
+		return
+	}
+	var siteID string
+	err := h.DB.InTenant(r.Context(), p.TenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `SELECT site_id FROM devices WHERE id = $1`, device).Scan(&siteID)
+	})
+	if err != nil {
+		platform.Fail(w, r, err)
+		return
+	}
+	if !p.Can(platform.PermExport, siteID) {
+		platform.Fail(w, r, platform.ErrForbidden)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	ack, err := h.Cmd.Send(ctx, p.TenantID, device, contract.CmdRetainEvent, map[string]any{"event_id": edge, "keep": in.Keep})
+	if err != nil || !ack.OK {
+		platform.Fail(w, r, platform.Errorf(http.StatusBadGateway, "device could not change retention"))
+		return
+	}
+	_ = h.DB.InTenant(r.Context(), p.TenantID, func(tx pgx.Tx) error {
+		return audit.Append(r.Context(), tx, p.TenantID, audit.FromRequest(r, "event.retain", "event", device+"/"+edge,
+			map[string]any{"keep": in.Keep, "reason": in.Reason}))
+	})
 	w.WriteHeader(http.StatusNoContent)
 }
 

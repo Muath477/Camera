@@ -100,7 +100,7 @@ func run(log *slog.Logger) error {
 
 	devicesH := &devices.Handler{DB: database, Cmd: bus, EnrollSecret: []byte(env("ENROLL_SECRET", "dev-enroll-secret")), Log: log}
 	camerasH := &cameras.Handler{DB: database, Cmd: bus}
-	eventsH := &events.Handler{DB: database, Notifier: dispatcher, Log: log}
+	eventsH := &events.Handler{DB: database, Cmd: bus, Notifier: dispatcher, Log: log}
 
 	bus.On(contract.KindHealth, devicesH.IngestHealth)
 	bus.On(contract.KindThumbs, camerasH.IngestThumb)

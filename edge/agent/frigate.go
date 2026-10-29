@@ -82,6 +82,28 @@ func (f *Frigate) Export(ctx context.Context, camera string, start, end time.Tim
 	return f.post(ctx, path, []byte(`{"playback":"realtime"}`))
 }
 
+// Retain locks or releases an event's recording. A reported incident must be
+// kept until the investigation ends, even past the normal retention period.
+func (f *Frigate) Retain(ctx context.Context, eventID string, keep bool) error {
+	if keep {
+		_, err := f.post(ctx, "/api/events/"+eventID+"/retain", nil)
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, f.base+"/api/events/"+eventID+"/retain", nil)
+	if err != nil {
+		return err
+	}
+	resp, err := f.http.Do(req)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("frigate retain: %s", resp.Status)
+	}
+	return nil
+}
+
 // Restart reloads Frigate after its configuration file changed.
 func (f *Frigate) Restart(ctx context.Context) error {
 	_, err := f.post(ctx, "/api/restart", nil)
