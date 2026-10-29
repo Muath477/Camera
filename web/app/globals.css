@@ -1,0 +1,47 @@
+@import "tailwindcss";
+@import "maplibre-gl/dist/maplibre-gl.css";
+
+@theme {
+  --font-sans: "IBM Plex Sans Arabic", system-ui, sans-serif;
+  --color-brand-50: #ecfdf5;
+  --color-brand-500: #0f9f6e;
+  --color-brand-600: #0b7f58;
+  --color-brand-700: #075f43;
+}
+
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --border: #e3e6eb;
+  --text: #17202b;
+  --muted: #5d6b7c;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1218;
+    --surface: #151c24;
+    --border: #253040;
+    --text: #e8edf3;
+    --muted: #93a1b2;
+  }
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.maplibregl-ctrl-attrib {
+  direction: ltr;
+}
