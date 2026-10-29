@@ -1,0 +1,111 @@
+# Camera profiles. Pushed to devices from the cloud (camera_profiles table)
+# without an agent update. Every entry must be verified on real firmware in
+# the lab before it ships to the stable channel.
+#
+# Template variables: {host} {port} {channel} {channel0}
+
+- id: hikvision
+  vendor: hikvision
+  api: isapi
+  rtsp_main: rtsp://{host}:{port}/Streaming/Channels/{channel}01
+  rtsp_sub: rtsp://{host}:{port}/Streaming/Channels/{channel}02
+  onvif_events: true
+  onvif_ptz: true
+  quirks: [max_two_rtsp_sessions]
+  recommended: {main_codec: h265, main_kbps: 2048, sub_width: 640, sub_height: 480, sub_fps: 5}
+
+- id: ezviz
+  vendor: ezviz
+  api: isapi
+  rtsp_main: rtsp://{host}:{port}/h264/ch{channel}/main/av_stream
+  rtsp_sub: rtsp://{host}:{port}/h264/ch{channel}/sub/av_stream
+  onvif_events: false
+  onvif_ptz: false
+  quirks: [password_is_verification_code, max_two_rtsp_sessions]
+  recommended: {main_codec: h264, main_kbps: 1536, sub_width: 640, sub_height: 360, sub_fps: 5}
+
+- id: dahua
+  vendor: dahua
+  api: dahua
+  rtsp_main: rtsp://{host}:{port}/cam/realmonitor?channel={channel}&subtype=0
+  rtsp_sub: rtsp://{host}:{port}/cam/realmonitor?channel={channel}&subtype=1
+  onvif_events: true
+  onvif_ptz: true
+  recommended: {main_codec: h265, main_kbps: 2048, sub_width: 640, sub_height: 480, sub_fps: 5}
+
+- id: imou
+  vendor: imou
+  api: dahua
+  rtsp_main: rtsp://{host}:{port}/cam/realmonitor?channel={channel}&subtype=0
+  rtsp_sub: rtsp://{host}:{port}/cam/realmonitor?channel={channel}&subtype=1
+  onvif_events: false
+  onvif_ptz: false
+  quirks: [password_is_safety_code]
+  recommended: {main_codec: h264, main_kbps: 1536, sub_width: 640, sub_height: 360, sub_fps: 5}
+
+- id: reolink
+  vendor: reolink
+  api: onvif
+  rtsp_main: rtsp://{host}:{port}/h264Preview_0{channel}_main
+  rtsp_sub: rtsp://{host}:{port}/h264Preview_0{channel}_sub
+  onvif_events: true
+  onvif_ptz: true
+  quirks: [no_relative_move, rtsp_drops_under_load]
+  recommended: {main_codec: h264, main_kbps: 2048, sub_width: 640, sub_height: 360, sub_fps: 5}
+
+- id: reolink-h265
+  vendor: reolink
+  model_pattern: "RLC-8|RLC-1|Duo|TrackMix"
+  api: onvif
+  rtsp_main: rtsp://{host}:{port}/Preview_0{channel}_main
+  rtsp_sub: rtsp://{host}:{port}/Preview_0{channel}_sub
+  onvif_events: true
+  onvif_ptz: true
+  quirks: [no_relative_move]
+  recommended: {main_codec: h265, main_kbps: 3072, sub_width: 640, sub_height: 360, sub_fps: 5}
+
+- id: axis
+  vendor: axis
+  api: vapix
+  rtsp_main: rtsp://{host}:{port}/axis-media/media.amp?camera={channel}&videocodec=h264
+  rtsp_sub: rtsp://{host}:{port}/axis-media/media.amp?camera={channel}&videocodec=h264&resolution=640x480&fps=5
+  onvif_events: true
+  onvif_ptz: true
+  recommended: {main_codec: h264, main_kbps: 3072, sub_width: 640, sub_height: 480, sub_fps: 5}
+
+- id: hanwha
+  vendor: hanwha
+  api: sunapi
+  rtsp_main: rtsp://{host}:{port}/{channel0}/profile2/media.smp
+  rtsp_sub: rtsp://{host}:{port}/{channel0}/profile3/media.smp
+  onvif_events: true
+  onvif_ptz: true
+  recommended: {main_codec: h265, main_kbps: 2048, sub_width: 640, sub_height: 480, sub_fps: 5}
+
+- id: uniview
+  vendor: uniview
+  api: onvif
+  rtsp_main: rtsp://{host}:{port}/unicast/c{channel}/s0/live
+  rtsp_sub: rtsp://{host}:{port}/unicast/c{channel}/s1/live
+  onvif_events: true
+  onvif_ptz: true
+  recommended: {main_codec: h265, main_kbps: 2048, sub_width: 640, sub_height: 480, sub_fps: 5}
+
+- id: tapo
+  vendor: tp-link
+  api: onvif
+  rtsp_main: rtsp://{host}:{port}/stream1
+  rtsp_sub: rtsp://{host}:{port}/stream2
+  onvif_events: true
+  onvif_ptz: true
+  quirks: [camera_account_separate_from_cloud_account]
+  recommended: {main_codec: h264, main_kbps: 2048, sub_width: 640, sub_height: 360, sub_fps: 5}
+
+- id: generic
+  vendor: generic
+  api: rtsp
+  rtsp_main: rtsp://{host}:{port}/
+  onvif_events: false
+  onvif_ptz: false
+  quirks: [manual_rtsp_path]
+  recommended: {main_codec: h264, main_kbps: 2048, sub_width: 640, sub_height: 480, sub_fps: 5}
