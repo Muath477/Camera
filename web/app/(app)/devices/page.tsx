@@ -1,81 +1,98 @@
 "use client";
 
-import { useState } from "react";
-import { Badge, ErrorBox, Loading } from "@/components/ui";
-import { api, formatTime, type Device, type Site } from "@/lib/api";
+import { motion } from "motion/react";
+import Link from "next/link";
+import { Cpu, HardDrive, Plus, Thermometer } from "lucide-react";
+import { Badge, Button, EmptyState, ErrorBox, PageHeader, Skeleton } from "@/components/ui";
+import type { Device, Site } from "@/lib/api";
+import { fmtRelative, fmtTB } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
-
-const tb = (n: number | null) => (n == null ? "—" : `${(n / 1e12).toFixed(1)} TB`);
 
 export default function DevicesPage() {
   const devices = useApi<{ items: Device[] | null }>("/v1/devices");
   const sites = useApi<{ items: Site[] | null }>("/v1/sites");
-  const [form, setForm] = useState({ serial: "", claim_code: "", site_id: "" });
-  const [msg, setMsg] = useState<string | null>(null);
   const siteName = Object.fromEntries((sites.data?.items ?? []).map((s) => [s.id, s.name]));
-
-  async function claim(e: React.FormEvent) {
-    e.preventDefault();
-    try {
-      await api("/v1/devices/claim", { method: "POST", body: JSON.stringify(form) });
-      setMsg("تم ربط الجهاز. وصّله بالكهرباء والإنترنت وسيظهر متصلاً خلال دقيقة.");
-      devices.reload();
-    } catch (err) {
-      setMsg(err instanceof Error ? err.message : String(err));
-    }
-  }
-
-  const input = "rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm";
+  const list = devices.data?.items ?? [];
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-bold">أجهزة التسجيل</h1>
-      <form onSubmit={claim} className="card p-4 flex flex-wrap gap-2 items-end">
-        <div className="w-full font-semibold">إضافة جهاز جديد</div>
-        <input className={input} dir="ltr" placeholder="الرقم التسلسلي" value={form.serial} onChange={(e) => setForm({ ...form, serial: e.target.value })} />
-        <input className={input} dir="ltr" placeholder="رمز التفعيل" value={form.claim_code} onChange={(e) => setForm({ ...form, claim_code: e.target.value })} />
-        <select className={input} value={form.site_id} onChange={(e) => setForm({ ...form, site_id: e.target.value })}>
-          <option value="">اختر الموقع</option>
-          {(sites.data?.items ?? []).map((s) => (
-            <option key={s.id} value={s.id}>{s.name}</option>
-          ))}
-        </select>
-        <button className="rounded-lg bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 text-sm">ربط</button>
-        {msg && <div className="w-full text-sm muted">{msg}</div>}
-      </form>
+    <div>
+      <PageHeader
+        title="أجهزة التسجيل"
+        subtitle="جهاز واحد في كل موقع: يسجّل على قرصه المخصص ويرسل الأحداث فقط."
+        actions={
+          <Link href="/devices/new">
+            <Button icon={Plus}>إضافة جهاز</Button>
+          </Link>
+        }
+      />
       {devices.error ? (
-        <ErrorBox error={devices.error} />
+        <ErrorBox error={devices.error} retry={devices.reload} />
       ) : !devices.data ? (
-        <Loading />
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="h-40" />
+          ))}
+        </div>
+      ) : list.length === 0 ? (
+        <div className="card">
+          <EmptyState
+            icon={Cpu}
+            title="لا توجد أجهزة بعد"
+            hint="امسح رمز QR على الجهاز أو أدخل رقمه التسلسلي ورمز التفعيل."
+            action={
+              <Link href="/devices/new">
+                <Button icon={Plus}>إضافة أول جهاز</Button>
+              </Link>
+            }
+          />
+        </div>
       ) : (
-        <div className="card overflow-x-auto">
-          <table className="w-full text-sm whitespace-nowrap">
-            <thead className="muted text-right">
-              <tr className="border-b border-[var(--border)]">
-                <th className="p-3 font-medium">الجهاز</th>
-                <th className="p-3 font-medium">الموقع</th>
-                <th className="p-3 font-medium">الحالة</th>
-                <th className="p-3 font-medium">القرص</th>
-                <th className="p-3 font-medium">تكفي لمدة</th>
-                <th className="p-3 font-medium">آخر اتصال</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(devices.data.items ?? []).map((d) => (
-                <tr key={d.id} className="border-b border-[var(--border)] last:border-0">
-                  <td className="p-3">
-                    <div className="font-medium" dir="ltr">{d.serial}</div>
-                    <div className="muted text-xs">{d.hw_model} · {d.fw_version}</div>
-                  </td>
-                  <td className="p-3">{d.site_id ? siteName[d.site_id] : "—"}</td>
-                  <td className="p-3"><Badge status={d.status} /></td>
-                  <td className="p-3">{tb(d.disk_used)} / {tb(d.disk_total)}</td>
-                  <td className="p-3">{d.retention_days != null ? `${Math.floor(d.retention_days)} يوماً` : "—"}</td>
-                  <td className="p-3 muted">{d.last_seen_at ? formatTime(d.last_seen_at) : "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {list.map((d, i) => {
+            const used = d.disk_total ? (d.disk_used ?? 0) / d.disk_total : 0;
+            const health = d.health ?? null;
+            return (
+              <motion.div key={d.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 * i }} className="card card-hover p-4 space-y-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="font-semibold font-mono text-sm" dir="ltr">{d.serial}</div>
+                    <div className="muted text-xs truncate">{d.site_id ? siteName[d.site_id] : "غير مرتبط بموقع"}</div>
+                  </div>
+                  <Badge status={d.status} dot={d.status !== "online"} />
+                </div>
+                <div>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="muted flex items-center gap-1"><HardDrive className="size-3.5" /> قرص التسجيل</span>
+                    <span>{fmtTB(d.disk_used)} / {fmtTB(d.disk_total)}</span>
+                  </div>
+                  <div className="h-2 rounded-full surface-2 overflow-hidden">
+                    <motion.div className={`h-full rounded-full ${used > 0.9 ? "bg-bad-500" : "bg-brand-500"}`} initial={{ width: 0 }} animate={{ width: `${used * 100}%` }} transition={{ duration: 0.8, delay: 0.1 * i }} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="rounded-lg surface-2 p-2">
+                    <div className="text-lg font-bold leading-none">{d.retention_days != null ? Math.floor(d.retention_days) : "—"}</div>
+                    <div className="muted text-[10px] mt-1">يوم حفظ</div>
+                  </div>
+                  <div className="rounded-lg surface-2 p-2">
+                    <div className="text-lg font-bold leading-none flex items-center justify-center gap-0.5">
+                      {health?.cpu_temp_c ? Math.round(health.cpu_temp_c) : "—"}
+                      <Thermometer className="size-3.5 muted" />
+                    </div>
+                    <div className="muted text-[10px] mt-1">حرارة °C</div>
+                  </div>
+                  <div className="rounded-lg surface-2 p-2">
+                    <div className="text-lg font-bold leading-none">{health?.queue_depth ?? 0}</div>
+                    <div className="muted text-[10px] mt-1">بالانتظار</div>
+                  </div>
+                </div>
+                <div className="flex justify-between muted text-xs">
+                  <span>{d.hw_model} · {d.fw_version || "—"}</span>
+                  <span>{d.last_seen_at ? fmtRelative(d.last_seen_at) : "لم يتصل بعد"}</span>
+                </div>
+              </motion.div>
+            );
+          })}
         </div>
       )}
     </div>
