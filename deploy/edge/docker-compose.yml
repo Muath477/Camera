@@ -1,0 +1,53 @@
+# The stack on every edge device. Only the agent talks to the cloud; Frigate
+# and go2rtc are reachable on the local network through Caddy only.
+name: camera-edge
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    volumes: [./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro]
+    networks: [internal]
+
+  frigate:
+    image: ghcr.io/blakeblackshear/frigate:0.17.2
+    restart: unless-stopped
+    shm_size: 512mb
+    privileged: false
+    devices:
+      - /dev/dri:/dev/dri          # Intel iGPU / NPU for OpenVINO and decoding
+    volumes:
+      - /etc/camera/frigate:/config
+      - /media/frigate:/media/frigate   # dedicated recordings disk
+      - type: tmpfs
+        target: /tmp/cache
+        tmpfs: { size: 1000000000 }
+    # Port 5000 has no authentication: it is never published, only the
+    # agent reaches it on the internal network.
+    networks: [internal, cameras]
+
+  agent:
+    image: ghcr.io/muath477/camera-edge-agent:latest
+    restart: unless-stopped
+    command: ["-config", "/etc/camera/agent.yaml"]
+    volumes:
+      - /etc/camera:/etc/camera
+      - /var/lib/camera-agent:/var/lib/camera-agent
+      - /etc/camera/frigate:/config
+      - /media/frigate:/media/frigate:ro
+    networks: [internal, cameras, uplink]
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports: ["443:443"]
+    volumes: [./Caddyfile:/etc/caddy/Caddyfile:ro]
+    networks: [internal, lan]
+
+networks:
+  internal: { internal: true }
+  cameras:                       # second NIC, camera VLAN, no internet route
+    driver: macvlan
+    driver_opts: { parent: enp2s0 }
+  uplink: {}
+  lan: {}

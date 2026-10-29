@@ -1,0 +1,41 @@
+{
+  "realm": "camera",
+  "enabled": true,
+  "internationalizationEnabled": true,
+  "supportedLocales": ["ar", "en"],
+  "defaultLocale": "ar",
+  "bruteForceProtected": true,
+  "failureFactor": 5,
+  "accessTokenLifespan": 900,
+  "ssoSessionMaxLifespan": 43200,
+  "revokeRefreshToken": true,
+  "roles": { "realm": [{ "name": "platform_admin" }] },
+  "clients": [
+    {
+      "clientId": "camera-web",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": ["http://localhost:3000/*"],
+      "webOrigins": ["http://localhost:3000"],
+      "attributes": { "pkce.code.challenge.method": "S256" },
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "tenant_id",
+            "claim.name": "tenant_id",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "requiredActions": [
+    { "alias": "CONFIGURE_TOTP", "name": "Configure OTP", "enabled": true, "defaultAction": false }
+  ]
+}
