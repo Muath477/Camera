@@ -133,6 +133,10 @@ func (a *Agent) runCommand(ctx context.Context, cmd contract.Command) (map[strin
 		a.thumbsUntil.Store(time.Now().Add(time.Duration(minutes) * time.Minute).Unix())
 		return nil, nil
 
+	case contract.CmdRetainEvent:
+		keep, _ := cmd.Args["keep"].(bool)
+		return nil, a.frigate.Retain(ctx, args.str("event_id"), keep)
+
 	case contract.CmdWebRTCOffer:
 		answer, err := a.webrtcAnswer(ctx, args.str("camera"), args.str("sdp"))
 		if err != nil {

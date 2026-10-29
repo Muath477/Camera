@@ -96,6 +96,7 @@ const (
 	CmdDiscover       = "discover"
 	CmdThumbs         = "thumbs"       // start or stop rolling thumbnails
 	CmdWebRTCOffer    = "webrtc_offer" // SDP offer in, SDP answer out
+	CmdRetainEvent    = "retain_event" // keep an incident past normal retention
 )
 
 // Command is a request from the cloud. Args depend on Type.
