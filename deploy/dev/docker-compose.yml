@@ -1,0 +1,92 @@
+# Full local stack: database, broker, identity, object storage, API, web
+# and a simulated edge device.
+#   docker compose -f deploy/dev/docker-compose.yml up --build
+name: camera-dev
+
+services:
+  postgres:
+    image: timescale/timescaledb-ha:pg16
+    environment:
+      POSTGRES_PASSWORD: camera
+      POSTGRES_DB: camera
+    ports: ["5432:5432"]
+    volumes:
+      - pg:/home/postgres/pgdata
+      - ./postgres-init.sql:/docker-entrypoint-initdb.d/10-roles.sql:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 3s
+      retries: 30
+
+  emqx:
+    image: emqx/emqx:5.8
+    ports: ["1883:1883", "18083:18083"]
+    environment:
+      EMQX_ALLOW_ANONYMOUS: "true"
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: camera
+      MINIO_ROOT_PASSWORD: camera-secret
+    ports: ["9000:9000", "9001:9001"]
+    volumes: [minio:/data]
+
+  minio-bucket:
+    image: minio/mc:latest
+    depends_on: [minio]
+    entrypoint: >
+      sh -c "until mc alias set local http://minio:9000 camera camera-secret; do sleep 1; done;
+             mc mb -p local/camera-media && mc ilm rule add --expire-days 90 local/camera-media"
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: start-dev --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    ports: ["8180:8080"]
+    volumes:
+      - ./keycloak-realm.json:/opt/keycloak/data/import/camera.json:ro
+
+  api:
+    build: { context: ../.., args: { TARGET: api } }
+    depends_on:
+      postgres: { condition: service_healthy }
+      emqx: { condition: service_started }
+    environment:
+      MIGRATE_DATABASE_URL: postgres://postgres:camera@postgres:5432/camera
+      DATABASE_URL: postgres://camera_api:camera_api@postgres:5432/camera
+      MQTT_URL: tcp://emqx:1883
+      S3_ENDPOINT: minio:9000
+      DEV_JWT_SECRET: dev-secret-change-me
+      CORS_ORIGINS: http://localhost:3000
+    ports: ["8080:8080"]
+
+  seed:
+    build: { context: ../.., args: { TARGET: api } }
+    depends_on: [api]
+    command: ["seed"]
+    environment:
+      DATABASE_URL: postgres://camera_api:camera_api@postgres:5432/camera
+      DEV_JWT_SECRET: dev-secret-change-me
+
+  web:
+    build: { context: ../../web, args: { NEXT_PUBLIC_API_URL: "http://localhost:8080" } }
+    depends_on: [api]
+    ports: ["3000:3000"]
+
+  device-sim:
+    build: { context: ../.., args: { TARGET: device-sim } }
+    depends_on: [seed]
+    restart: on-failure
+    command:
+      - -broker=tcp://emqx:1883
+      - -tenant=11111111-1111-4111-8111-111111111111
+      - -device=22222222-2222-4222-8222-000000000001
+      - -cameras=entrance,cashier,kitchen,parking
+
+volumes:
+  pg:
+  minio:

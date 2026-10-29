@@ -1,0 +1,22 @@
+device_id: 00000000-0000-0000-0000-000000000000
+tenant_id: 00000000-0000-0000-0000-000000000000
+
+cloud:
+  broker_url: ssl://mqtt.camera.sa:8883
+  api_url: https://device-api.camera.sa
+  ca_file: /etc/camera/pki/ca.pem
+  cert_file: /etc/camera/pki/device.pem
+  key_file: /etc/camera/pki/device.key
+
+frigate:
+  url: http://frigate:5000
+  broker_url: tcp://mosquitto:1883
+  config_path: /config/config.yml
+  detector: openvino
+
+go2rtc_url: http://frigate:1984
+recordings_path: /media/frigate
+profiles_dir: /etc/camera/profiles
+retention_days: 90
+health_interval: 30s
+thumb_interval: 15s

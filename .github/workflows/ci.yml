@@ -1,0 +1,79 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: timescale/timescaledb-ha:pg16
+        env:
+          POSTGRES_PASSWORD: camera
+          POSTGRES_DB: camera
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 3s --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Vet
+        run: go vet ./...
+      - name: Format
+        run: test -z "$(gofmt -l .)"
+      - name: Migrate
+        env:
+          PGPASSWORD: camera
+        run: |
+          psql -h localhost -U postgres -d camera -c "CREATE ROLE camera_api LOGIN PASSWORD 'camera_api'"
+          MIGRATE_DATABASE_URL=postgres://postgres:camera@localhost:5432/camera go run ./cmd/api migrate
+          psql -h localhost -U postgres -d camera -c "GRANT camera_app TO camera_api"
+      - name: Test
+        env:
+          CAMERA_TEST_DATABASE_URL: postgres://camera_api:camera_api@localhost:5432/camera
+        run: go test -race ./...
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run build
+
+  images:
+    needs: [go, web]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        target: [api, edge-agent]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          build-args: TARGET=${{ matrix.target }}
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/camera-${{ matrix.target }}:${{ github.sha }}

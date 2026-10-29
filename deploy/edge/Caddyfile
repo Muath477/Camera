@@ -1,0 +1,11 @@
+# Local viewing inside the branch, also when the internet is down.
+{
+	local_certs
+}
+
+:443 {
+	tls internal
+	handle_path /live/* {
+		reverse_proxy frigate:8971
+	}
+}

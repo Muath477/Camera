@@ -81,9 +81,10 @@ func seed(ctx context.Context, db *platform.DB, log *slog.Logger) error {
 				return err
 			}
 			retention := []float64{104, 61, 97}[i]
-			if err := tx.QueryRow(ctx, `INSERT INTO devices (tenant_id, site_id, serial, hw_model, fw_version, status, last_seen_at, disk_total, disk_used, retention_days)
-				VALUES ($1, $2, $3, 'N100-16G', '0.1.0', 'active', now(), 8000000000000, 5200000000000, $4) RETURNING id`,
-				tenantID, siteID, fmt.Sprintf("CAM-DEMO-%03d", i+1), retention).Scan(&deviceID); err != nil {
+			// Fixed ids so the device simulator can be pointed at them.
+			if err := tx.QueryRow(ctx, `INSERT INTO devices (id, tenant_id, site_id, serial, hw_model, fw_version, status, last_seen_at, disk_total, disk_used, retention_days)
+				VALUES ($1, $2, $3, $4, 'N100-16G', '0.1.0', 'active', now(), 8000000000000, 5200000000000, $5) RETURNING id`,
+				fmt.Sprintf("22222222-2222-4222-8222-%012d", i+1), tenantID, siteID, fmt.Sprintf("CAM-DEMO-%03d", i+1), retention).Scan(&deviceID); err != nil {
 				return err
 			}
 			for j, c := range s.cams {
