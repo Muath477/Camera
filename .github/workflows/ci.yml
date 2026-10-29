@@ -66,6 +66,8 @@ jobs:
         target: [api, edge-agent]
     steps:
       - uses: actions/checkout@v4
+      - name: Image owner must be lowercase
+        run: echo "OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -76,4 +78,4 @@ jobs:
           context: .
           build-args: TARGET=${{ matrix.target }}
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/camera-${{ matrix.target }}:${{ github.sha }}
+          tags: ghcr.io/${{ env.OWNER }}/camera-${{ matrix.target }}:${{ github.sha }}
