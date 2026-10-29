@@ -79,6 +79,7 @@ export type Camera = {
   name: string;
   display_name: string;
   vendor?: string;
+  model?: string;
   ptz: boolean;
   lat?: number;
   lng?: number;
@@ -99,6 +100,7 @@ export type Device = {
   disk_total: number | null;
   disk_used: number | null;
   retention_days: number | null;
+  health?: { cpu_temp_c?: number; queue_depth?: number; retention_days?: number } | null;
 };
 
 export type CameraEvent = {
