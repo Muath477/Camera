@@ -50,7 +50,7 @@ func LoadConfig(path string) (*Config, error) {
 		RecordingsPath: "/media/frigate",
 		ProfilesDir:    "/etc/camera/profiles",
 		KeyFile:        "/var/lib/camera-agent/secret.key",
-		RetentionDays:  45,
+		RetentionDays:  90,
 		HealthInterval: 30 * time.Second,
 		ThumbInterval:  15 * time.Second,
 	}
