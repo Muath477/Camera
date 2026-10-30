@@ -2,7 +2,8 @@
 
 import maplibregl from "maplibre-gl";
 import { useEffect, useRef } from "react";
-import type { Camera, Site } from "@/lib/api";
+import { label as labelAR, thumbUrl, type Camera, type CameraEvent, type Site } from "@/lib/api";
+import { fmtRelative } from "@/lib/format";
 
 const STYLE = process.env.NEXT_PUBLIC_MAP_STYLE ?? "https://tiles.openfreemap.org/styles/liberty";
 
@@ -33,6 +34,8 @@ type Props = {
   cameras?: Camera[];
   // Site ids with a critical event in the last hour; their markers pulse.
   critical?: Set<string>;
+  // The newest critical event per camera, shown as a bubble at the camera.
+  alerts?: Record<string, CameraEvent>;
   onSelectSite?: (id: string) => void;
   onSelectCamera?: (id: string) => void;
   // When set, the camera with this id is draggable and the callback gets the
@@ -42,7 +45,7 @@ type Props = {
   fit?: boolean;
 };
 
-export default function SiteMap({ sites, cameras = [], critical, onSelectSite, onSelectCamera, editable, className, fit = true }: Props) {
+export default function SiteMap({ sites, cameras = [], critical, alerts = {}, onSelectSite, onSelectCamera, editable, className, fit = true }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markers = useRef<Map<string, maplibregl.Marker>>(new Map());
@@ -80,9 +83,12 @@ export default function SiteMap({ sites, cameras = [], critical, onSelectSite, o
     if (!map) return;
 
     const placed = cameras.filter((c) => c.lat != null && c.lng != null);
+    // state drives the cone colour: editing (blue), alert (red), online
+    // (green), offline (grey).
+    const stateOf = (c: Camera) => (editable?.cameraId === c.id ? "editing" : alerts[c.id] ? "alert" : c.status === "online" ? "online" : "offline");
     const coneFeatures = placed.map((c) => ({
       type: "Feature" as const,
-      properties: { id: c.id, online: c.status === "online", editing: editable?.cameraId === c.id },
+      properties: { id: c.id, state: stateOf(c) },
       geometry: { type: "Polygon" as const, coordinates: [viewCone(c.lng!, c.lat!, c.heading_deg ?? 0, c.fov_deg ?? 90)] },
     }));
 
@@ -97,15 +103,20 @@ export default function SiteMap({ sites, cameras = [], critical, onSelectSite, o
           type: "fill",
           source: "cones",
           paint: {
-            "fill-color": ["case", ["get", "editing"], "#3b82f6", ["get", "online"], "#0f9f6e", "#e11d48"],
-            "fill-opacity": ["case", ["get", "editing"], 0.4, 0.22],
+            "fill-color": ["match", ["get", "state"], "editing", "#3b82f6", "alert", "#e11d48", "online", "#0f9f6e", "#94a3b8"],
+            "fill-opacity": ["match", ["get", "state"], "editing", 0.4, "alert", 0.34, "offline", 0.14, 0.22],
           },
         });
         map.addLayer({
           id: "cones-line",
           type: "line",
           source: "cones",
-          paint: { "line-color": ["case", ["get", "online"], "#0b7f58", "#be123c"], "line-width": 1, "line-opacity": 0.6 },
+          paint: {
+            "line-color": ["match", ["get", "state"], "editing", "#2563eb", "alert", "#be123c", "online", "#0b7f58", "#64748b"],
+            "line-width": ["match", ["get", "state"], "alert", 1.6, 1],
+            "line-opacity": 0.7,
+            "line-dasharray": ["match", ["get", "state"], "offline", ["literal", [2, 2]], ["literal", [1, 0]]],
+          },
         });
       }
 
@@ -124,6 +135,7 @@ export default function SiteMap({ sites, cameras = [], critical, onSelectSite, o
           el.className = fresh.className;
           el.title = fresh.title;
           el.style.cssText = fresh.style.cssText;
+          if (fresh.innerHTML !== el.innerHTML) el.innerHTML = fresh.innerHTML;
           m.setDraggable(!!opts?.draggable);
         }
         return m;
@@ -144,19 +156,42 @@ export default function SiteMap({ sites, cameras = [], critical, onSelectSite, o
       }
       for (const c of placed) {
         const editing = editable?.cameraId === c.id;
+        const alert = alerts[c.id];
+        const colour = editing ? "#3b82f6" : alert ? "#e11d48" : c.status === "online" ? "#0b7f58" : "#64748b";
         const m = upsert(
           "c" + c.id,
           [c.lng!, c.lat!],
           () => {
             const el = document.createElement("div");
-            el.className = "map-marker";
-            el.style.cssText = `width:12px;height:12px;border-width:2px;background:${editing ? "#3b82f6" : c.status === "online" ? "#0b7f58" : "#dc2626"};${editing ? "cursor:grab;width:16px;height:16px" : ""}`;
+            el.className = `map-marker ${alert ? "critical" : ""}`;
+            el.style.cssText = `width:12px;height:12px;border-width:2px;background:${colour};${editing ? "cursor:grab;width:16px;height:16px" : ""}`;
             el.title = c.display_name;
             el.onclick = () => !editing && cbs.current.onSelectCamera?.(c.id);
             return el;
           },
           { draggable: editing },
         );
+        // A bubble above the camera with the alert and its thumbnail; it
+        // appears once and stays until the event is acknowledged.
+        if (alert && !editing) {
+          upsert(
+            "a" + c.id,
+            [c.lng!, c.lat!],
+            () => {
+              const el = document.createElement("button");
+              el.type = "button";
+              el.className = "map-bubble";
+              el.innerHTML = `<img alt="" src="${thumbUrl(c.id)}" onerror="this.style.display='none'" /><span class="map-bubble-text"><b>${labelAR(alert.label)}</b><small>${c.display_name} · ${fmtRelative(alert.time)}</small></span>`;
+              el.title = labelAR(alert.label);
+              el.onclick = (e) => {
+                e.stopPropagation();
+                cbs.current.onSelectCamera?.(c.id);
+              };
+              return el;
+            },
+            { anchor: "bottom", offset: [0, -12] },
+          );
+        }
         if (editing) {
           m.off("dragend", () => {});
           m.on("dragend", () => {
@@ -185,7 +220,7 @@ export default function SiteMap({ sites, cameras = [], critical, onSelectSite, o
 
     if (map.isStyleLoaded()) apply();
     else map.once("style.load", apply);
-  }, [sites, cameras, critical, editable, fit]);
+  }, [sites, cameras, critical, alerts, editable, fit]);
 
   return <div ref={ref} className={className ?? "h-[420px] w-full rounded-xl overflow-hidden"} />;
 }

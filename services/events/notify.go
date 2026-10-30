@@ -27,16 +27,17 @@ type Dispatcher struct {
 	Log      *slog.Logger
 }
 
-// Provider sends a short Arabic message on one channel to a tenant's users.
+// Provider sends a short Arabic message on one channel to the tenant's
+// users who want that channel at that severity.
 type Provider interface {
-	Send(ctx context.Context, tenantID, channel, title, body string) error
+	Send(ctx context.Context, tenantID, severity, channel, title, body string) error
 }
 
 // LogProvider records messages instead of sending them (development).
 type LogProvider struct{ Log *slog.Logger }
 
-func (p LogProvider) Send(_ context.Context, tenantID, channel, title, body string) error {
-	p.Log.Info("notification", "tenant", tenantID, "channel", channel, "title", title, "body", body)
+func (p LogProvider) Send(_ context.Context, tenantID, severity, channel, title, body string) error {
+	p.Log.Info("notification", "tenant", tenantID, "severity", severity, "channel", channel, "title", title, "body", body)
 	return nil
 }
 
@@ -69,7 +70,7 @@ func (d *Dispatcher) Notify(ctx context.Context, tenantID string, rule Rule, ev 
 			d.webhooks(ctx, tenantID, rule, ev)
 			continue
 		}
-		if err := d.Provider.Send(ctx, tenantID, ch, title, body); err != nil {
+		if err := d.Provider.Send(ctx, tenantID, rule.Severity, ch, title, body); err != nil {
 			d.Log.Warn("notify", "channel", ch, "err", err)
 		}
 	}

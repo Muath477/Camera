@@ -37,6 +37,8 @@ type Event struct {
 	SnapshotKey *string    `json:"snapshot_key,omitempty"`
 	Severity    string     `json:"severity"`
 	AckedAt     *time.Time `json:"acked_at,omitempty"`
+	AckedBy     *string    `json:"acked_by_name,omitempty"`
+	AckNote     *string    `json:"ack_note,omitempty"`
 }
 
 // Notifier delivers alerts for a matched rule.
@@ -58,6 +60,7 @@ func (h *Handler) Routes(mux *http.ServeMux, wrap func(http.Handler) http.Handle
 	mux.Handle("GET /v1/events", wrap(http.HandlerFunc(h.list)))
 	mux.Handle("GET /v1/events/stream", wrap(http.HandlerFunc(h.stream)))
 	mux.Handle("POST /v1/events/{device}/{edge}/ack", wrap(http.HandlerFunc(h.ack)))
+	mux.Handle("POST /v1/events/ack", wrap(http.HandlerFunc(h.ackMany)))
 	mux.Handle("POST /v1/events/{device}/{edge}/retain", wrap(http.HandlerFunc(h.retain)))
 	mux.Handle("GET /v1/events/summary", wrap(http.HandlerFunc(h.summary)))
 	mux.Handle("GET /v1/alert-rules", wrap(http.HandlerFunc(h.listRules)))
@@ -151,12 +154,15 @@ func (h *Handler) cool(rule Rule, ev Event) bool {
 }
 
 const eventColumns = `e.time, e.device_id, e.edge_id, e.site_id, e.camera_id, c.display_name, e.kind, e.label, e.score,
-	e.zones, e.end_time, e.snapshot_key, e.severity, e.acked_at`
+	e.zones, e.end_time, e.snapshot_key, e.severity, e.acked_at, u.name, e.ack_note`
+
+// eventFrom joins what eventColumns reads.
+const eventFrom = `events e LEFT JOIN cameras c ON c.id = e.camera_id LEFT JOIN users u ON u.id = e.acked_by`
 
 func scanEvent(row pgx.Row) (Event, error) {
 	var ev Event
 	err := row.Scan(&ev.Time, &ev.DeviceID, &ev.EdgeID, &ev.SiteID, &ev.CameraID, &ev.CameraName, &ev.Kind, &ev.Label,
-		&ev.Score, &ev.Zones, &ev.EndTime, &ev.SnapshotKey, &ev.Severity, &ev.AckedAt)
+		&ev.Score, &ev.Zones, &ev.EndTime, &ev.SnapshotKey, &ev.Severity, &ev.AckedAt, &ev.AckedBy, &ev.AckNote)
 	return ev, err
 }
 
@@ -225,7 +231,7 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 	where, args := f.Where()
 	var out []Event
 	err = h.DB.InTenant(r.Context(), p.TenantID, func(tx pgx.Tx) error {
-		rows, err := tx.Query(r.Context(), `SELECT `+eventColumns+` FROM events e LEFT JOIN cameras c ON c.id = e.camera_id
+		rows, err := tx.Query(r.Context(), `SELECT `+eventColumns+` FROM `+eventFrom+`
 			WHERE `+where+fmt.Sprintf(` ORDER BY e.time DESC LIMIT %d`, f.Limit), args...)
 		if err != nil {
 			return err
@@ -286,32 +292,99 @@ func (h *Handler) summary(w http.ResponseWriter, r *http.Request) {
 	platform.JSON(w, http.StatusOK, map[string]any{"items": out})
 }
 
+// ack marks one event as seen. An optional note says what was done about it.
 func (h *Handler) ack(w http.ResponseWriter, r *http.Request) {
-	p := platform.PrincipalFrom(r.Context())
-	device, edge := r.PathValue("device"), r.PathValue("edge")
-	err := h.DB.InTenant(r.Context(), p.TenantID, func(tx pgx.Tx) error {
-		var siteID string
-		if err := tx.QueryRow(r.Context(), `SELECT site_id FROM devices WHERE id = $1`, device).Scan(&siteID); err != nil {
-			return err
+	var in struct {
+		Note string `json:"note"`
+	}
+	if r.ContentLength > 0 {
+		if err := platform.Decode(r, &in); err != nil {
+			platform.Fail(w, r, platform.ErrBadInput)
+			return
 		}
-		if !p.Can(platform.PermAlertAck, siteID) {
-			return platform.ErrForbidden
-		}
-		tag, err := tx.Exec(r.Context(), `UPDATE events SET acked_by = $3, acked_at = now()
-			WHERE device_id = $1 AND edge_id = $2 AND acked_at IS NULL`, device, edge, p.UserID)
-		if err != nil {
-			return err
-		}
-		if tag.RowsAffected() == 0 {
-			return pgx.ErrNoRows
-		}
-		return audit.Append(r.Context(), tx, p.TenantID, audit.FromRequest(r, "event.ack", "event", device+"/"+edge, nil))
-	})
+	}
+	n, err := h.acknowledge(r, []EventRef{{r.PathValue("device"), r.PathValue("edge")}}, in.Note)
 	if err != nil {
 		platform.Fail(w, r, err)
 		return
 	}
+	if n == 0 {
+		platform.Fail(w, r, pgx.ErrNoRows)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// EventRef names one event.
+type EventRef struct {
+	DeviceID string `json:"device_id"`
+	EdgeID   string `json:"edge_id"`
+}
+
+// ackMany acknowledges a selection in one go, with one note and one audit
+// entry listing everything it covered.
+func (h *Handler) ackMany(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Items []EventRef `json:"items"`
+		Note  string     `json:"note"`
+	}
+	if err := platform.Decode(r, &in); err != nil || len(in.Items) == 0 || len(in.Items) > 500 {
+		platform.Fail(w, r, platform.ErrBadInput)
+		return
+	}
+	n, err := h.acknowledge(r, in.Items, in.Note)
+	if err != nil {
+		platform.Fail(w, r, err)
+		return
+	}
+	platform.JSON(w, http.StatusOK, map[string]any{"acknowledged": n})
+}
+
+func (h *Handler) acknowledge(r *http.Request, items []EventRef, note string) (int64, error) {
+	p := platform.PrincipalFrom(r.Context())
+	if len(note) > 500 {
+		return 0, platform.Errorf(http.StatusBadRequest, "note is too long")
+	}
+	var total int64
+	err := h.DB.InTenant(r.Context(), p.TenantID, func(tx pgx.Tx) error {
+		ctx := r.Context()
+		sites := map[string]string{}
+		var ids []string
+		for _, it := range items {
+			site, ok := sites[it.DeviceID]
+			if !ok {
+				if err := tx.QueryRow(ctx, `SELECT site_id FROM devices WHERE id = $1`, it.DeviceID).Scan(&site); err != nil {
+					return err
+				}
+				sites[it.DeviceID] = site
+			}
+			if !p.Can(platform.PermAlertAck, site) {
+				return platform.ErrForbidden
+			}
+			tag, err := tx.Exec(ctx, `UPDATE events SET acked_by = $3, acked_at = now(), ack_note = nullif($4, '')
+				WHERE device_id = $1 AND edge_id = $2 AND acked_at IS NULL`, it.DeviceID, it.EdgeID, p.UserID, note)
+			if err != nil {
+				return err
+			}
+			if tag.RowsAffected() > 0 {
+				total += tag.RowsAffected()
+				ids = append(ids, it.DeviceID+"/"+it.EdgeID)
+			}
+		}
+		if total == 0 {
+			return nil
+		}
+		details := map[string]any{"count": total, "events": ids}
+		if note != "" {
+			details["note"] = note
+		}
+		target := ids[0]
+		if len(ids) > 1 {
+			target = ""
+		}
+		return audit.Append(ctx, tx, p.TenantID, audit.FromRequest(r, "event.ack", "event", target, details))
+	})
+	return total, err
 }
 
 // retain locks an incident's recording on the device past the normal

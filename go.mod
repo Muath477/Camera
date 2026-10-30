@@ -4,7 +4,10 @@ go 1.26.0
 
 require (
 	github.com/MicahParks/keyfunc/v3 v3.8.2
+	github.com/SherClockHolmes/webpush-go v1.4.0
+	github.com/abdullahdiaa/garabic v0.1.0
 	github.com/eclipse/paho.mqtt.golang v1.5.1
+	github.com/go-pdf/fpdf v0.9.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/minio/minio-go/v7 v7.4.1

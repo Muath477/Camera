@@ -13,14 +13,15 @@
 contract/          رسائل MQTT المشتركة بين الجهاز والسحابة
 edge/agent/        وكيل الحافة: اكتشاف الكاميرات، إعداد Frigate، الأحداث، الصحة، الأوامر، الطابور الدائم
 edge/profiles/     تعريفات علامات الكاميرات (مسارات RTSP، الواجهات، الشذوذات)
-services/          وحدات السحابة: tenancy, devices, cameras, events, search, media, compliance, audit
+services/          وحدات السحابة: tenancy, devices, cameras, events, search, media, compliance, audit, auth, notify
 services/db/       ترحيلات PostgreSQL (RLS، TimescaleDB، pgvector، PostGIS)
-cmd/api/           خدمة السحابة (ومعها أوامر migrate و seed)
+cmd/api/           خدمة السحابة (ومعها أوامر migrate و seed و vapid)
 cmd/edge-agent/    وكيل الجهاز
 cmd/device-sim/    جهاز افتراضي للتطوير
 web/               الواجهة العربية (Next.js، MapLibre)
 deploy/dev/        بيئة تطوير كاملة بـ Docker Compose
 deploy/edge/       حزمة الحاويات على جهاز الحافة
+deploy/prod/       النشر على خادم داخل المملكة (Caddy، شهادات الأجهزة، نسخ احتياطي)
 ```
 
 ## التشغيل المحلي
@@ -66,13 +67,31 @@ cd web && npm run build
 | `DATABASE_URL` | اتصال الخدمة (مستخدم غير مميّز عضو في `camera_app`) |
 | `MIGRATE_DATABASE_URL` | اتصال المالك لتطبيق الترحيلات عند الإقلاع |
 | `MQTT_URL`, `MQTT_USER`, `MQTT_PASSWORD` | وسيط الأجهزة |
-| `OIDC_JWKS_URL`, `OIDC_ISSUER`, `OIDC_AUDIENCE` | التحقق من رموز Keycloak |
-| `DEV_JWT_SECRET` | رموز التطوير فقط |
+| `APP_ENV` | `production` يفرض الأسرار ويمنع رموز التطوير |
+| `APP_URL` | عنوان الواجهة الذي تفتحه الإشعارات |
+| `JWT_SECRET` | توقيع رموز الجلسات بعد الدخول بالجوال (32 بايت على الأقل) |
+| `DEV_JWT_SECRET` | بديل `JWT_SECRET` في التطوير فقط |
+| `OIDC_JWKS_URL`, `OIDC_ISSUER`, `OIDC_AUDIENCE` | مزوّد هوية خارجي اختياري (Keycloak) |
+| `SMS_PROVIDER`, `SMS_HTTP_URL`, `SMS_HTTP_TOKEN`, `SMS_FROM` | بوابة الرسائل النصية لرموز الدخول والتنبيهات (`http` أو `console`) |
+| `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID`, `WHATSAPP_TEMPLATE`, `WHATSAPP_LANG` | WhatsApp Business Cloud API (اختياري) |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | إشعارات Web Push؛ أنشئها بـ `go run ./cmd/api vapid` |
 | `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` | تخزين الوسائط |
+| `S3_PUBLIC_URL` | العنوان العام للتخزين الذي تحمله الروابط الموقّعة |
 | `SNAPSHOT_SIGNING_SEED` | مفتاح Ed25519 لتوقيع اللقطات (من KMS في الإنتاج) |
 | `LINK_SECRET`, `ENROLL_SECRET` | روابط المدقق ورموز تفعيل الأجهزة |
 | `EMBEDDER_URL` | خدمة التضمين النصي للبحث بالوصف |
-| `TRUST_PROXY_DEVICE_IDENTITY` | قبول هوية الجهاز من بوابة mTLS |
+| `TRUST_PROXY_DEVICE_IDENTITY` | قبول شهادة الجهاز من بوابة mTLS عبر الرأس `X-Client-Cert` |
+
+## الدخول والإشعارات
+
+- الدخول برقم الجوال: `POST /v1/auth/otp/request` يرسل رمزاً من ستة أرقام عبر رسالة نصية أو واتساب (ثلاث محاولات كل عشر دقائق)، و`POST /v1/auth/otp/verify` يعيد رمز جلسة لكل منشأة يملك الرقم عضوية فيها. رقم بلا حساب يسجّل منشأة جديدة عبر `POST /v1/auth/register`. في التطوير يعود الرمز في الاستجابة بدل الإرسال.
+- التنبيهات على ثلاث درجات: الحرج يصل فوراً على القنوات المختارة (إشعار الجوال، رسالة نصية، واتساب)، والتحذير يحترم ساعات الهدوء، والعادي يبقى داخل التطبيق. الإعدادات في `GET/PUT /v1/me/notifications`، واشتراكات Web Push في `/v1/me/push-subscriptions`.
+- الواجهة تطبيق ويب قابل للتثبيت (PWA) مع عامل خدمة يستقبل الإشعارات ويعرض صفحة بلا اتصال.
+- الإقرار الجماعي بالأحداث مع ملاحظة في `POST /v1/events/ack`، وتقرير الامتثال بصيغة PDF عربية في `GET /v1/sites/{id}/compliance.pdf` وعبر رابط المدقق العام.
+
+## النشر
+
+`deploy/prod` يشغّل المنصة كاملة على خادم واحد داخل المملكة بـ Docker Compose: Caddy لشهادات HTTPS، وبوابة شهادات عميل لواجهة الأجهزة، وTimescaleDB، وMosquitto بشهادات من مرجع مصدّق خاص، وMinIO، ونسخ احتياطي ليلي. الخطوات في [deploy/prod/README.md](deploy/prod/README.md).
 
 ## الأمان
 

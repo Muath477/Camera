@@ -5,6 +5,10 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: { default: "Camera", template: "%s · Camera" },
   description: "منصة إدارة كاميرات المراقبة والامتثال للمنشآت السعودية",
+  applicationName: "Camera",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, title: "Camera", statusBarStyle: "black-translucent" },
+  icons: { icon: "/icons/icon-192.png", apple: "/apple-touch-icon.png" },
 };
 
 export const viewport: Viewport = {

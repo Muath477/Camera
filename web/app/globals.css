@@ -321,3 +321,44 @@ body {
     box-shadow: none;
   }
 }
+
+/* Alert bubble on the map: a one-shot pop, then it stays. */
+.map-bubble {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  direction: rtl;
+  padding: 6px 8px 6px 6px;
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--bad-300, #fda4af);
+  box-shadow: var(--shadow-md), 0 0 0 3px rgba(225, 29, 72, 0.15);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  animation: bubble-in 420ms var(--ease-spring) both;
+}
+.map-bubble::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 10px;
+  height: 10px;
+  transform: translateX(-50%) rotate(45deg);
+  background: var(--surface);
+  border-right: 1px solid var(--bad-300, #fda4af);
+  border-bottom: 1px solid var(--bad-300, #fda4af);
+}
+.map-bubble img { width: 44px; height: 30px; object-fit: cover; border-radius: 6px; background: #0b1016; }
+.map-bubble-text { display: flex; flex-direction: column; gap: 2px; text-align: right; }
+.map-bubble-text b { color: var(--color-bad-500); font-weight: 600; }
+.map-bubble-text small { color: var(--muted); font-size: 10.5px; }
+@keyframes bubble-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.92); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) { .map-bubble { animation: none; } }

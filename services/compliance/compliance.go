@@ -206,9 +206,11 @@ type Handler struct {
 func (h *Handler) Routes(mux *http.ServeMux, wrap func(http.Handler) http.Handler) {
 	mux.Handle("GET /v1/facility-categories", wrap(http.HandlerFunc(h.categories)))
 	mux.Handle("GET /v1/sites/{id}/compliance", wrap(http.HandlerFunc(h.report)))
+	mux.Handle("GET /v1/sites/{id}/compliance.pdf", wrap(http.HandlerFunc(h.reportPDF)))
 	mux.Handle("POST /v1/sites/{id}/compliance/attest", wrap(http.HandlerFunc(h.attest)))
 	mux.Handle("POST /v1/sites/{id}/compliance/share", wrap(http.HandlerFunc(h.share)))
 	mux.HandleFunc("GET /public/compliance/{token}", h.public)
+	mux.HandleFunc("GET /public/compliance/{token}/pdf", h.publicPDF)
 }
 
 func (h *Handler) categories(w http.ResponseWriter, r *http.Request) {
@@ -402,4 +404,45 @@ func (h *Handler) public(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	platform.JSON(w, http.StatusOK, rep)
+}
+
+func (h *Handler) reportPDF(w http.ResponseWriter, r *http.Request) {
+	p := platform.PrincipalFrom(r.Context())
+	id := r.PathValue("id")
+	if !p.Can(platform.PermComplianceView, id) {
+		platform.Fail(w, r, platform.ErrForbidden)
+		return
+	}
+	rep, err := h.build(r.Context(), p.TenantID, id, false)
+	if err != nil {
+		platform.Fail(w, r, err)
+		return
+	}
+	h.servePDF(w, r, rep)
+}
+
+func (h *Handler) publicPDF(w http.ResponseWriter, r *http.Request) {
+	c, err := h.parse(r.PathValue("token"))
+	if err != nil {
+		platform.Error(w, http.StatusNotFound, "link is invalid or expired")
+		return
+	}
+	rep, err := h.build(r.Context(), c.Tenant, c.Site, false)
+	if err != nil {
+		platform.Fail(w, r, err)
+		return
+	}
+	h.servePDF(w, r, rep)
+}
+
+func (h *Handler) servePDF(w http.ResponseWriter, r *http.Request, rep *Report) {
+	out, err := RenderPDF(rep)
+	if err != nil {
+		platform.Fail(w, r, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+FileName(rep)+`"`)
+	w.Header().Set("Cache-Control", "no-store")
+	w.Write(out)
 }
