@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -33,13 +34,24 @@ type Store interface {
 }
 
 // S3 implements Store on any S3-compatible bucket inside the Kingdom.
+// Presign, when set, is a client pointed at the public address of the same
+// bucket: devices and browsers follow presigned links from outside the
+// network, so the signature has to carry the host they will use.
 type S3 struct {
-	Client *minio.Client
-	Bucket string
+	Client  *minio.Client
+	Presign *minio.Client
+	Bucket  string
+}
+
+func (s S3) signer() *minio.Client {
+	if s.Presign != nil {
+		return s.Presign
+	}
+	return s.Client
 }
 
 func (s S3) PresignPut(ctx context.Context, key string, ttl time.Duration) (string, error) {
-	u, err := s.Client.PresignedPutObject(ctx, s.Bucket, key, ttl)
+	u, err := s.signer().PresignedPutObject(ctx, s.Bucket, key, ttl)
 	if err != nil {
 		return "", err
 	}
@@ -47,7 +59,7 @@ func (s S3) PresignPut(ctx context.Context, key string, ttl time.Duration) (stri
 }
 
 func (s S3) PresignGet(ctx context.Context, key string, ttl time.Duration) (string, error) {
-	u, err := s.Client.PresignedGetObject(ctx, s.Bucket, key, ttl, url.Values{})
+	u, err := s.signer().PresignedGetObject(ctx, s.Bucket, key, ttl, url.Values{})
 	if err != nil {
 		return "", err
 	}
@@ -59,8 +71,10 @@ type Handler struct {
 	Cmd     devices.Commander
 	Store   Store
 	SignKey ed25519.PrivateKey
-	// TrustProxyIdentity accepts the device identity from headers set by the
-	// mTLS-terminating gateway. Only enable behind that gateway.
+	// TrustProxyIdentity accepts the device's client certificate from the
+	// X-Client-Cert header (DER, base64) that the mTLS-terminating gateway
+	// sets after verifying it. Only enable behind that gateway, and only when
+	// it overwrites the header on every request.
 	TrustProxyIdentity bool
 }
 
@@ -286,19 +300,26 @@ func (h *Handler) mediaURL(w http.ResponseWriter, r *http.Request) {
 }
 
 // DeviceIdentity reads the device and tenant from the client certificate
-// (CN = device id, OU = tenant id).
+// (CN = device id, OU = tenant id), either from the TLS connection or, behind
+// the gateway, from the certificate it forwards.
 func (h *Handler) DeviceIdentity(r *http.Request) (deviceID, tenantID string, ok bool) {
-	if r.TLS != nil && len(r.TLS.PeerCertificates) > 0 {
-		c := r.TLS.PeerCertificates[0]
-		if len(c.Subject.OrganizationalUnit) > 0 {
-			return c.Subject.CommonName, c.Subject.OrganizationalUnit[0], true
+	var cert *x509.Certificate
+	switch {
+	case r.TLS != nil && len(r.TLS.PeerCertificates) > 0:
+		cert = r.TLS.PeerCertificates[0]
+	case h.TrustProxyIdentity:
+		der, err := base64.StdEncoding.DecodeString(r.Header.Get("X-Client-Cert"))
+		if err != nil || len(der) == 0 {
+			return "", "", false
+		}
+		if cert, err = x509.ParseCertificate(der); err != nil {
+			return "", "", false
 		}
 	}
-	if h.TrustProxyIdentity {
-		d, t := r.Header.Get("X-Device-Id"), r.Header.Get("X-Tenant-Id")
-		return d, t, d != "" && t != ""
+	if cert == nil || cert.Subject.CommonName == "" || len(cert.Subject.OrganizationalUnit) == 0 {
+		return "", "", false
 	}
-	return "", "", false
+	return cert.Subject.CommonName, cert.Subject.OrganizationalUnit[0], true
 }
 
 // deviceUpload gives a device a presigned URL for an event snapshot or clip.

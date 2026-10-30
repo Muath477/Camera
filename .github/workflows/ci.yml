@@ -78,4 +78,6 @@ jobs:
           context: .
           build-args: TARGET=${{ matrix.target }}
           push: true
-          tags: ghcr.io/${{ env.OWNER }}/camera-${{ matrix.target }}:${{ github.sha }}
+          tags: |
+            ghcr.io/${{ env.OWNER }}/camera-${{ matrix.target }}:${{ github.sha }}
+            ghcr.io/${{ env.OWNER }}/camera-${{ matrix.target }}:latest

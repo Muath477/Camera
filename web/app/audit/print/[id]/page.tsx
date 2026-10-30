@@ -1,9 +1,9 @@
 "use client";
 
 import { use, useEffect } from "react";
-import { Printer } from "lucide-react";
+import { FileDown, Printer } from "lucide-react";
 import { Badge, Button, Loading } from "@/components/ui";
-import { type ComplianceReport } from "@/lib/api";
+import { download, type ComplianceReport } from "@/lib/api";
 import { fmtDateTime } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 
@@ -26,7 +26,10 @@ export default function PrintReport({ params }: { params: Promise<{ id: string }
           <h1 className="text-2xl font-bold">تقرير جاهزية الامتثال</h1>
           <div className="text-sm text-ink-500">نظام استخدام كاميرات المراقبة الأمنية</div>
         </div>
-        <Button variant="secondary" size="sm" icon={Printer} onClick={() => window.print()} className="no-print">طباعة</Button>
+        <div className="flex gap-2 no-print">
+          <Button variant="secondary" size="sm" icon={FileDown} onClick={() => download(`/v1/sites/${id}/compliance.pdf`, `تقرير-الامتثال-${r.site_name}.pdf`)}>PDF</Button>
+          <Button variant="secondary" size="sm" icon={Printer} onClick={() => window.print()}>طباعة</Button>
+        </div>
       </div>
       <table className="w-full text-sm">
         <tbody>

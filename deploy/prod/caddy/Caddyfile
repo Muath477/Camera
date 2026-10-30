@@ -1,0 +1,63 @@
+{
+	email {$ACME_EMAIL}
+}
+
+# The app. The service worker, manifest and icons are served by Next.
+{$APP_DOMAIN} {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		Permissions-Policy "camera=(), microphone=(), geolocation=(self)"
+	}
+	reverse_proxy web:3000
+}
+
+# The API for people and the web app. Event streams are long-lived, so no
+# proxy timeouts. Device endpoints are not reachable here.
+{$API_DOMAIN} {
+	encode zstd gzip
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	handle /device/* {
+		respond 403
+	}
+	reverse_proxy api:8080 {
+		header_up -X-Client-Cert
+		flush_interval -1
+		transport http {
+			read_timeout 0
+			write_timeout 0
+		}
+	}
+}
+
+# The API for devices: the same service, reached only with a client
+# certificate from the private CA. The verified certificate travels to the
+# API in X-Client-Cert, which carries the device id (CN) and tenant (OU).
+# The server certificate comes from the private CA too, so devices trust one
+# CA for the broker and this endpoint.
+{$DEVICE_API_DOMAIN} {
+	tls /pki/broker.crt /pki/broker.key {
+		client_auth {
+			mode require_and_verify
+			trust_pool file {
+				pem_file /pki/ca.crt
+			}
+		}
+	}
+	handle /device/* {
+		reverse_proxy api:8080 {
+			header_up X-Client-Cert {http.request.tls.client.certificate_der_base64}
+		}
+	}
+	handle {
+		respond 404
+	}
+}
+
+# Thumbnails and clips, read through presigned links only.
+{$MEDIA_DOMAIN} {
+	reverse_proxy minio:9000
+}

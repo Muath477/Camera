@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
+import { FileDown } from "lucide-react";
 import { Badge, Loading } from "@/components/ui";
 import { API_URL, type ComplianceReport } from "@/lib/api";
 
@@ -30,6 +31,12 @@ export default function AuditorReport({ params }: { params: Promise<{ token: str
           {report.category?.name_ar} · صدر في {new Date(report.generated_at).toLocaleString("ar-SA-u-nu-latn", { timeZone: "Asia/Riyadh" })}
         </div>
         <div className="text-4xl font-bold mt-2">{report.score}%</div>
+        <a
+          href={`${API_URL}/public/compliance/${token}/pdf`}
+          className="inline-flex items-center gap-1.5 mt-3 text-sm text-brand-600 hover:underline"
+        >
+          <FileDown className="size-4" /> تنزيل التقرير PDF
+        </a>
       </div>
       <ul className="card divide-y divide-[var(--border)]">
         {report.checks.map((c) => (

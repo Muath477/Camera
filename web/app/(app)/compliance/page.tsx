@@ -3,10 +3,10 @@
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Check, ChevronDown, Copy, FileText, Link2, ShieldCheck } from "lucide-react";
+import { Check, ChevronDown, Copy, FileDown, FileText, Link2, ShieldCheck } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import { Badge, Button, Counter, EmptyState, PageHeader, Ring, Skeleton } from "@/components/ui";
-import { api, type ComplianceReport, type Site } from "@/lib/api";
+import { api, download, type ComplianceReport, type Site } from "@/lib/api";
 import { useApi } from "@/lib/hooks";
 
 export default function CompliancePage() {
@@ -27,6 +27,18 @@ export default function CompliancePage() {
   useEffect(() => {
     if (location.hash) setOpen(location.hash.slice(1));
   }, []);
+
+  const [downloading, setDownloading] = useState<string | null>(null);
+  async function pdf(r: ComplianceReport) {
+    setDownloading(r.site_id);
+    try {
+      await download(`/v1/sites/${r.site_id}/compliance.pdf`, `تقرير-الامتثال-${r.site_name}.pdf`);
+    } catch {
+      toast.push({ tone: "critical", title: "تعذّر إنشاء الملف", body: "حاول مرة أخرى بعد قليل." });
+    } finally {
+      setDownloading(null);
+    }
+  }
 
   async function share(siteId: string) {
     const res = await api<{ token: string }>(`/v1/sites/${siteId}/compliance/share`, { method: "POST" });
@@ -123,8 +135,11 @@ export default function CompliancePage() {
                         <Link href={`/sites/${r.site_id}`}>
                           <Button variant="secondary" size="sm">صفحة الموقع</Button>
                         </Link>
+                        <Button variant="secondary" size="sm" icon={FileDown} loading={downloading === r.site_id} onClick={() => pdf(r)}>
+                          تنزيل PDF
+                        </Button>
                         <Button variant="secondary" size="sm" icon={FileText} onClick={() => window.open(`/audit/print/${r.site_id}`, "_blank")}>
-                          تقرير للطباعة
+                          طباعة
                         </Button>
                         <Button size="sm" icon={Link2} onClick={() => share(r.site_id)}>
                           رابط للمدقق (7 أيام)

@@ -52,6 +52,19 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json();
 }
 
+// download fetches a file with the session token and hands it to the browser.
+export async function download(path: string, filename: string) {
+  const token = getToken();
+  const res = await fetch(API_URL + path, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  if (!res.ok) throw new ApiError(res.status, res.statusText);
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
 export function eventStreamUrl(): string {
   return `${API_URL}/v1/events/stream?access_token=${encodeURIComponent(getToken() ?? "")}`;
 }
@@ -118,7 +131,20 @@ export type CameraEvent = {
   snapshot_key?: string;
   severity: "info" | "warning" | "critical";
   acked_at?: string;
+  acked_by_name?: string;
+  ack_note?: string;
 };
+
+export type NotificationSettings = {
+  prefs: { critical_channels: string[]; warning_channels: string[]; quiet_from: string | null; quiet_to: string | null };
+  push_subscriptions: number;
+  phone: string | null;
+  vapid_public_key: string;
+  sms_enabled: boolean;
+  whatsapp_enabled: boolean;
+};
+
+export type Account = { tenant_id: string; tenant_name: string; token?: string };
 
 export type ComplianceCheck = {
   type: string;

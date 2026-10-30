@@ -66,6 +66,17 @@ export default function Dashboard() {
   const unacked = merged.filter((e) => e.severity === "critical" && !e.acked_at).length;
   const offline = camList.length - online;
   const avgScore = reports && reports.length ? Math.round(reports.reduce((a, r) => a + r.score, 0) / reports.length) : null;
+  // Newest unacknowledged critical event per camera in the last hour, for
+  // the map bubbles.
+  const alerts = useMemo(() => {
+    const cutoff = Date.now() - 36e5;
+    const out: Record<string, CameraEvent> = {};
+    for (const e of merged) {
+      if (e.severity !== "critical" || e.acked_at || !e.camera_id || Date.parse(e.time) < cutoff) continue;
+      if (!out[e.camera_id] || Date.parse(e.time) > Date.parse(out[e.camera_id].time)) out[e.camera_id] = e;
+    }
+    return out;
+  }, [merged]);
   const selectSite = useCallback((id: string) => router.push(`/sites/${id}`), [router]);
   const selectCamera = useCallback((id: string) => router.push(`/cameras/${id}`), [router]);
 
@@ -166,10 +177,11 @@ export default function Dashboard() {
             />
           ) : (
             <>
-              <SiteMap sites={siteList} cameras={camList} critical={criticalSites} onSelectSite={selectSite} onSelectCamera={selectCamera} />
+              <SiteMap sites={siteList} cameras={camList} critical={criticalSites} alerts={alerts} onSelectSite={selectSite} onSelectCamera={selectCamera} />
               <div className="absolute bottom-4 right-4 card px-3 py-2 text-xs flex items-center gap-3 shadow-[var(--shadow-md)]">
                 <span className="flex items-center gap-1.5"><span className="map-marker ok !w-3 !h-3 !border" /> سليم</span>
                 <span className="flex items-center gap-1.5"><span className="map-marker degraded !w-3 !h-3 !border" /> كاميرا منقطعة</span>
+                <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm border border-dashed border-ink-400 bg-ink-200/50" /> بلا تسجيل</span>
                 <span className="flex items-center gap-1.5"><span className="pulse-dot bad" /> حدث حرج</span>
               </div>
             </>

@@ -8,11 +8,13 @@ import {
   Activity,
   Bell,
   Cpu,
+  Download,
   LayoutDashboard,
   LogOut,
   Monitor,
   Moon,
   Search,
+  Settings,
   ShieldCheck,
   Sun,
   Video,
@@ -23,6 +25,7 @@ import { useApi } from "@/lib/hooks";
 import { useTheme } from "@/lib/theme";
 import CommandPalette from "./CommandPalette";
 import { LiveProvider, useLive } from "./Live";
+import { PWAProvider, usePWA } from "./PWA";
 import { ToastProvider } from "./Toast";
 
 const NAV = [
@@ -99,6 +102,9 @@ function Sidebar({ me, onLogout }: { me: Me | null; onLogout: () => void }) {
               <div className="text-sm font-medium truncate">{me.name}</div>
               <div className="text-xs text-[var(--sidebar-text)] truncate">{me.tenant_name}</div>
             </div>
+            <Link href="/settings" className="text-[var(--sidebar-text)] hover:text-white" aria-label="الإعدادات" title="الإعدادات">
+              <Settings className="size-4" />
+            </Link>
             <button onClick={onLogout} className="text-[var(--sidebar-text)] hover:text-white" aria-label="تسجيل الخروج" title="تسجيل الخروج">
               <LogOut className="size-4" />
             </button>
@@ -132,6 +138,7 @@ function MobileNav() {
 
 function TopBar({ me, onSearch, onLogout }: { me: Me | null; onSearch: () => void; onLogout: () => void }) {
   const { criticalCount } = useLive();
+  const { canInstall, install } = usePWA();
   return (
     <header className="sticky top-0 z-30 bg-[var(--bg)]/80 backdrop-blur border-b border-[var(--border)] md:border-0 md:bg-transparent">
       <div className="flex items-center gap-2 px-4 py-2.5 md:px-8 md:py-4 max-w-7xl">
@@ -166,9 +173,17 @@ function TopBar({ me, onSearch, onLogout }: { me: Me | null; onSearch: () => voi
             )}
           </AnimatePresence>
         </Link>
+        {canInstall && (
+          <button onClick={install} className="hidden sm:flex items-center gap-1.5 h-9 px-3 rounded-lg border border-brand-300 text-brand-700 dark:text-brand-300 dark:border-brand-700 text-sm hover:bg-brand-50 dark:hover:bg-brand-900/30" title="ثبّت التطبيق على جهازك">
+            <Download className="size-4" /> تثبيت التطبيق
+          </button>
+        )}
         <div className="md:hidden">
           <ThemeButtonLight />
         </div>
+        <Link href="/settings" className="md:hidden size-9 rounded-lg hover:bg-[var(--surface-2)] flex items-center justify-center" aria-label="الإعدادات">
+          <Settings className="size-4" />
+        </Link>
         {me && (
           <button onClick={onLogout} className="md:hidden size-9 rounded-lg hover:bg-[var(--surface-2)] flex items-center justify-center" aria-label="تسجيل الخروج">
             <LogOut className="size-4" />
@@ -220,6 +235,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
   return (
     <ToastProvider>
+      <PWAProvider>
       <LiveProvider>
         <div className="min-h-screen md:flex">
           <Sidebar me={me} onLogout={logout} />
@@ -231,6 +247,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         </div>
         <AnimatePresence>{palette && <CommandPalette onClose={() => setPalette(false)} />}</AnimatePresence>
       </LiveProvider>
+      </PWAProvider>
     </ToastProvider>
   );
 }

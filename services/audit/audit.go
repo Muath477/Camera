@@ -40,13 +40,14 @@ func FromRequest(r *http.Request, action, targetType, targetID string, details m
 	if p != nil {
 		e.ActorID = p.UserID
 	}
-	if ip := clientIP(r); ip != "" {
+	if ip := ClientIP(r); ip != "" {
 		e.IP = ip
 	}
 	return e
 }
 
-func clientIP(r *http.Request) string {
+// ClientIP is the caller's address, honouring the proxy header.
+func ClientIP(r *http.Request) string {
 	if f := r.Header.Get("X-Forwarded-For"); f != "" {
 		for i := 0; i < len(f); i++ {
 			if f[i] == ',' {

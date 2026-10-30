@@ -1,0 +1,9 @@
+# A device may only use its own topics: t/<tenant>/d/<device id>/...
+pattern readwrite t/+/d/%u/#
+
+# The API reads every tenant through a shared subscription and sends
+# commands to any device.
+user api
+topic read $share/api/t/#
+topic read t/#
+topic write t/#

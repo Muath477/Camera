@@ -7,8 +7,10 @@ import (
 	"crypto/ed25519"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -20,12 +22,14 @@ import (
 
 	"github.com/Muath477/Camera/contract"
 	"github.com/Muath477/Camera/services/audit"
+	"github.com/Muath477/Camera/services/auth"
 	"github.com/Muath477/Camera/services/cameras"
 	"github.com/Muath477/Camera/services/compliance"
 	"github.com/Muath477/Camera/services/db"
 	"github.com/Muath477/Camera/services/devices"
 	"github.com/Muath477/Camera/services/events"
 	"github.com/Muath477/Camera/services/media"
+	"github.com/Muath477/Camera/services/notify"
 	"github.com/Muath477/Camera/services/platform"
 	"github.com/Muath477/Camera/services/search"
 	"github.com/Muath477/Camera/services/tenancy"
@@ -57,8 +61,19 @@ func run(log *slog.Logger) error {
 		}
 		log.Info("migrations applied")
 	}
-	if len(os.Args) > 1 && os.Args[1] == "migrate" {
-		return nil
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "migrate":
+			return nil
+		case "vapid":
+			// Prints a fresh Web Push key pair for the deployment's environment file.
+			priv, pub, err := notify.GenerateVAPID()
+			if err != nil {
+				return err
+			}
+			fmt.Printf("VAPID_PUBLIC_KEY=%s\nVAPID_PRIVATE_KEY=%s\n", pub, priv)
+			return nil
+		}
 	}
 
 	database, err := platform.Connect(ctx, env("DATABASE_URL", "postgres://camera_api:camera_api@localhost:5432/camera"))
@@ -71,8 +86,13 @@ func run(log *slog.Logger) error {
 		return seed(ctx, database, log)
 	}
 
+	production := os.Getenv("APP_ENV") == "production"
+	jwtSecret := env("JWT_SECRET", os.Getenv("DEV_JWT_SECRET"))
+	if production && len(jwtSecret) < 32 {
+		return errors.New("JWT_SECRET of at least 32 bytes is required in production")
+	}
 	authn, err := platform.NewAuthenticator(ctx, database, os.Getenv("OIDC_JWKS_URL"), os.Getenv("OIDC_ISSUER"),
-		os.Getenv("OIDC_AUDIENCE"), os.Getenv("DEV_JWT_SECRET"))
+		os.Getenv("OIDC_AUDIENCE"), jwtSecret)
 	if err != nil {
 		return err
 	}
@@ -92,7 +112,8 @@ func run(log *slog.Logger) error {
 		return err
 	}
 
-	dispatcher := &events.Dispatcher{DB: database, Provider: events.LogProvider{Log: log}, HTTP: &http.Client{Timeout: 10 * time.Second}, Log: log}
+	notifier := notifyService(database, log, production)
+	dispatcher := &events.Dispatcher{DB: database, Provider: notifier, HTTP: &http.Client{Timeout: 10 * time.Second}, Log: log}
 	var embedder search.Embedder
 	if u := os.Getenv("EMBEDDER_URL"); u != "" {
 		embedder = search.HTTPEmbedder{URL: u, HTTP: &http.Client{Timeout: 10 * time.Second}}
@@ -119,9 +140,11 @@ func run(log *slog.Logger) error {
 		&media.Handler{DB: database, Cmd: bus, Store: store, SignKey: signKey, TrustProxyIdentity: os.Getenv("TRUST_PROXY_DEVICE_IDENTITY") == "true"},
 		&compliance.Handler{DB: database, LinkSecret: []byte(env("LINK_SECRET", "dev-link-secret"))},
 		&audit.Handler{DB: database},
+		&notify.Handler{Service: notifier},
 	} {
 		m.Routes(mux, wrap)
 	}
+	(&auth.Handler{DB: database, Secret: []byte(jwtSecret), SMS: notifier.SMS, WhatsApp: notifier.WhatsApp, Dev: !production, Log: log}).PublicRoutes(mux)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		if err := database.Pool.Ping(r.Context()); err != nil {
 			http.Error(w, "db", http.StatusServiceUnavailable)
@@ -153,17 +176,26 @@ func hostname() string {
 	return h
 }
 
+// objectStore connects to the bucket. S3_PUBLIC_URL, when set, is the address
+// devices and browsers reach the same bucket at; presigned links carry it.
 func objectStore() (media.Store, error) {
-	endpoint := env("S3_ENDPOINT", "localhost:9000")
-	client, err := minio.New(endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(env("S3_ACCESS_KEY", "camera"), env("S3_SECRET_KEY", "camera-secret"), ""),
-		Secure: os.Getenv("S3_SECURE") == "true",
-		Region: env("S3_REGION", "me-central2"),
-	})
+	creds := credentials.NewStaticV4(env("S3_ACCESS_KEY", "camera"), env("S3_SECRET_KEY", "camera-secret"), "")
+	region := env("S3_REGION", "me-central2")
+	client, err := minio.New(env("S3_ENDPOINT", "localhost:9000"), &minio.Options{Creds: creds, Secure: os.Getenv("S3_SECURE") == "true", Region: region})
 	if err != nil {
 		return nil, err
 	}
-	return media.S3{Client: client, Bucket: env("S3_BUCKET", "camera-media")}, nil
+	store := media.S3{Client: client, Bucket: env("S3_BUCKET", "camera-media")}
+	if public := os.Getenv("S3_PUBLIC_URL"); public != "" {
+		u, err := url.Parse(public)
+		if err != nil || u.Host == "" {
+			return nil, errors.New("S3_PUBLIC_URL must be a URL such as https://media.example.sa")
+		}
+		if store.Presign, err = minio.New(u.Host, &minio.Options{Creds: creds, Secure: u.Scheme == "https", Region: region}); err != nil {
+			return nil, err
+		}
+	}
+	return store, nil
 }
 
 // signingKey loads the Ed25519 seed (base64) that signs snapshots. In
@@ -203,4 +235,33 @@ func cors(origins string, next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// notifyService wires the message gateways from the environment. Anything
+// unset stays off: in development codes are logged and returned instead.
+func notifyService(database *platform.DB, log *slog.Logger, production bool) *notify.Service {
+	client := &http.Client{Timeout: 15 * time.Second}
+	s := &notify.Service{DB: database, Log: log, AppURL: env("APP_URL", "http://localhost:3000")}
+	switch env("SMS_PROVIDER", "") {
+	case "http":
+		s.SMS = notify.HTTPSMS{URL: os.Getenv("SMS_HTTP_URL"), Token: os.Getenv("SMS_HTTP_TOKEN"), From: env("SMS_FROM", "Camera"), HTTP: client}
+	case "console":
+		s.SMS = notify.Console{Log: log, Channel: "sms"}
+	}
+	if token := os.Getenv("WHATSAPP_TOKEN"); token != "" {
+		s.WhatsApp = notify.WhatsApp{Token: token, PhoneID: os.Getenv("WHATSAPP_PHONE_ID"), Template: os.Getenv("WHATSAPP_TEMPLATE"), Lang: env("WHATSAPP_LANG", "ar"), HTTP: client}
+	}
+	pub, priv := os.Getenv("VAPID_PUBLIC_KEY"), os.Getenv("VAPID_PRIVATE_KEY")
+	if pub == "" || priv == "" {
+		if production {
+			log.Warn("push disabled: VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY are not set")
+		} else if p, k, err := notify.GenerateVAPID(); err == nil {
+			priv, pub = p, k
+			log.Info("push: generated a development VAPID key pair; set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY to keep subscriptions across restarts")
+		}
+	}
+	if pub != "" && priv != "" {
+		s.Push = &notify.Push{PublicKey: pub, PrivateKey: priv, Subject: env("VAPID_SUBJECT", "mailto:ops@camera.sa"), HTTP: client}
+	}
+	return s
 }

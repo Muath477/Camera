@@ -1,0 +1,156 @@
+# Production stack for one virtual machine inside the Kingdom.
+#
+#   cp .env.example .env                       # fill every secret
+#   ./pki/init-ca.sh mqtt.example.sa device.example.sa   # once: the private CA for devices
+#   docker run --rm -v ./mosquitto:/m eclipse-mosquitto:2.0 mosquitto_passwd -c -b /m/passwd api <MQTT_PASSWORD>
+#   docker compose up -d --build
+#
+# README.md next to this file walks through the whole setup.
+#
+# Caddy terminates HTTPS for the app and the API and renews certificates
+# itself. Devices reach the broker on 8883 and the device API with client
+# certificates from the private CA; the API talks to the broker on the
+# internal network with a password. Full video never arrives here: events, thumbnails and short
+# clips only.
+name: camera
+
+services:
+  caddy:
+    image: caddy:2.9
+    restart: unless-stopped
+    ports: ["80:80", "443:443", "443:443/udp"]
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+      API_DOMAIN: ${API_DOMAIN}
+      MEDIA_DOMAIN: ${MEDIA_DOMAIN}
+      DEVICE_API_DOMAIN: ${DEVICE_API_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./pki/out:/pki:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [api, web]
+
+  postgres:
+    image: timescale/timescaledb-ha:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: camera
+      CAMERA_API_PASSWORD: ${CAMERA_API_PASSWORD}
+    volumes:
+      - pg:/home/postgres/pgdata
+      - ./postgres-init.sh:/docker-entrypoint-initdb.d/10-roles.sh:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 5s
+      retries: 30
+    # Never published: only reachable on the compose network.
+
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    restart: unless-stopped
+    ports: ["8883:8883"]
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./mosquitto/acl:/mosquitto/config/acl:ro
+      - ./mosquitto/passwd:/mosquitto/config/passwd
+      - ./pki/out:/mosquitto/certs:ro
+      - mosquitto_data:/mosquitto/data
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -h localhost -p 1884 -u api -P \"$$MQTT_PASSWORD\" -t '$$SYS/#' -C 1 -W 3 >/dev/null"]
+      interval: 10s
+      retries: 6
+    environment:
+      MQTT_PASSWORD: ${MQTT_PASSWORD}
+
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    restart: unless-stopped
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY}
+      MINIO_BROWSER: "off"
+    volumes: [minio:/data]
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    depends_on: [minio]
+    entrypoint: >
+      sh -c "until mc alias set local http://minio:9000 ${S3_ACCESS_KEY} ${S3_SECRET_KEY}; do sleep 2; done;
+             mc mb -p local/camera-media; mc ilm rule add --expire-days ${MEDIA_RETENTION_DAYS:-90} local/camera-media || true"
+
+  api:
+    image: ghcr.io/muath477/camera-api:${CAMERA_VERSION:-latest}
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+      mosquitto: { condition: service_healthy }
+    environment:
+      APP_ENV: production
+      APP_URL: https://${APP_DOMAIN}
+      LISTEN_ADDR: ":8080"
+      MIGRATE_DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/camera
+      DATABASE_URL: postgres://camera_api:${CAMERA_API_PASSWORD}@postgres:5432/camera
+      MQTT_URL: tcp://mosquitto:1884
+      MQTT_USER: api
+      MQTT_PASSWORD: ${MQTT_PASSWORD}
+      S3_ENDPOINT: minio:9000
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_BUCKET: camera-media
+      S3_PUBLIC_URL: https://${MEDIA_DOMAIN}
+      JWT_SECRET: ${JWT_SECRET}
+      LINK_SECRET: ${LINK_SECRET}
+      ENROLL_SECRET: ${ENROLL_SECRET}
+      SNAPSHOT_SIGNING_SEED: ${SNAPSHOT_SIGNING_SEED}
+      CORS_ORIGINS: https://${APP_DOMAIN}
+      OIDC_JWKS_URL: ${OIDC_JWKS_URL:-}
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}
+      SMS_PROVIDER: ${SMS_PROVIDER:-}
+      SMS_HTTP_URL: ${SMS_HTTP_URL:-}
+      SMS_HTTP_TOKEN: ${SMS_HTTP_TOKEN:-}
+      SMS_FROM: ${SMS_FROM:-Camera}
+      WHATSAPP_TOKEN: ${WHATSAPP_TOKEN:-}
+      WHATSAPP_PHONE_ID: ${WHATSAPP_PHONE_ID:-}
+      WHATSAPP_TEMPLATE: ${WHATSAPP_TEMPLATE:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
+      VAPID_SUBJECT: mailto:${ACME_EMAIL}
+      EMBEDDER_URL: ${EMBEDDER_URL:-}
+      TRUST_PROXY_DEVICE_IDENTITY: "true"
+
+  web:
+    # Built here rather than pulled: the API address is fixed at build time.
+    build:
+      context: ../../web
+      args:
+        NEXT_PUBLIC_API_URL: https://${API_DOMAIN}
+    image: camera-web:local
+    restart: unless-stopped
+    depends_on: [api]
+    environment:
+      NODE_ENV: production
+
+  backup:
+    image: timescale/timescaledb-ha:pg16
+    restart: unless-stopped
+    depends_on: [postgres]
+    entrypoint: ["/bin/bash", "/backup.sh"]
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-30}
+    volumes:
+      - ./backup.sh:/backup.sh:ro
+      - backups:/backups
+
+volumes:
+  pg:
+  minio:
+  mosquitto_data:
+  caddy_data:
+  caddy_config:
+  backups:
