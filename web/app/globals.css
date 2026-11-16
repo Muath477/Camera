@@ -388,6 +388,68 @@ body {
   }
 }
 
+/* Mascot moods: dizzy spiral spins, paws pop up over the lens. */
+.mascot-spin {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.mascot-paws {
+  transform-box: fill-box;
+  transform-origin: bottom;
+  animation: paws-up 320ms var(--ease-spring) both;
+}
+@keyframes paws-up {
+  from {
+    transform: translateY(14px) scaleY(0.4);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .mascot-spin {
+    animation: spin 1.2s linear infinite;
+  }
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* A "no" head shake for a wrong code, and the camera flash on a click. */
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20%,
+  60% {
+    transform: translateX(-7px) rotate(-2deg);
+  }
+  40%,
+  80% {
+    transform: translateX(7px) rotate(2deg);
+  }
+}
+.shake {
+  animation: shake 420ms ease-in-out;
+}
+@keyframes flash {
+  from {
+    opacity: 0.9;
+  }
+  to {
+    opacity: 0;
+  }
+}
+.camera-flash {
+  position: fixed;
+  inset: 0;
+  background: #fff;
+  pointer-events: none;
+  z-index: 70;
+  animation: flash 380ms ease-out forwards;
+}
+
 /* Live indicator and critical pulse */
 .pulse-dot {
   position: relative;

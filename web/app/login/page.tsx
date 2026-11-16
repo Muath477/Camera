@@ -5,11 +5,69 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Bell, Building2, KeyRound, MessageCircle, ShieldCheck, Smartphone, Video } from "lucide-react";
-import Mascot from "@/components/Mascot";
+import Mascot, { type Mood } from "@/components/Mascot";
 import { Button } from "@/components/ui";
 import { ApiError, api, setToken, type Account } from "@/lib/api";
 
 type Step = "phone" | "code" | "choose" | "register";
+
+const PHOTO_LINES = [
+  "قل «تشيز»!",
+  "لقطة حلوة، بس الإضاءة تحتاج شغل.",
+  "حفظتها في سجل التدقيق… أمزح.",
+  "كاميرا تصوّر كاميرا؟ هذا تصوير ذاتي.",
+  "عيني عليك، بس بلطف.",
+  "ابتسم، أنت في البث المباشر… لا، لست فيه.",
+];
+
+// buddyState picks Lensy's face, where it looks and what it says from the
+// state of the sign-in. Errors win, then success, then the step.
+function buddyState(s: { step: Step; focus: "phone" | "code" | null; digits: number; code: number; busy: boolean; error: string | null; success: boolean; photo?: string }): {
+  mood: Mood;
+  look: { x: number; y: number } | null;
+  line: string;
+} {
+  if (s.success) return { mood: "wink", look: null, line: "ابتسم… دخلت! نجهّز لك فروعك." };
+  if (s.error) return { mood: "dizzy", look: null, line: "أوبس! دوّختني. شوف الرسالة تحت وجرّب مرة ثانية." };
+  if (s.busy) return { mood: "happy", look: { x: 0, y: -1 }, line: s.step === "phone" ? "أرسل الحمام الزاجل… أقصد الرسالة." : "لحظة، أتأكد منك…" };
+  if (s.photo) return { mood: "wink", look: null, line: s.photo };
+  switch (s.step) {
+    case "phone":
+      if (s.digits >= 10) return { mood: "happy", look: { x: 0, y: 1 }, line: "رقم مرتّب! اضغط «أرسل الرمز» وأنا أنتظر." };
+      // The eye follows the number along the field as it is typed (LTR field).
+      if (s.focus === "phone" || s.digits > 0) return { mood: "happy", look: { x: -1 + (s.digits / 10) * 2, y: 1 }, line: s.digits ? `كمّل… ${s.digits} من 10 أرقام.` : "أنا أتابع، اكتب رقمك." };
+      return { mood: "happy", look: null, line: "هلا! أنا لنزي. أراقب فروعك طول اليوم، بس رقمك ما أعرفه." };
+    case "code":
+      if (s.code === 6) return { mood: "wink", look: null, line: "ستة من ستة. ما شفت شي، والله." };
+      if (s.focus === "code") return { mood: "shy", look: null, line: "ما أشوف! اكتب الرمز وأنا مغمّض." };
+      return { mood: "happy", look: null, line: "وصلك الرمز؟ أنا أنتظر معك." };
+    case "choose":
+      return { mood: "happy", look: { x: 0, y: 1 }, line: "ما شاء الله، أكثر من منشأة! اختر وحدة." };
+    case "register":
+      return { mood: "wink", look: null, line: "ضيف جديد! حيّاك، عرّفني على منشأتك." };
+  }
+}
+
+// Confetti: a handful of stickers that burst from the card on success.
+function Confetti() {
+  const colors = ["bg-sun-400", "bg-pop-400", "bg-aqua-400", "bg-brand-400", "bg-lilac-400"];
+  return (
+    <div className="pointer-events-none absolute inset-x-0 top-10 h-0 motion-reduce:hidden" aria-hidden>
+      {Array.from({ length: 18 }, (_, i) => {
+        const angle = (i / 18) * Math.PI * 2;
+        return (
+          <motion.span
+            key={i}
+            initial={{ x: 0, y: 0, opacity: 1, rotate: 0, scale: 0.6 }}
+            animate={{ x: Math.cos(angle) * (90 + (i % 3) * 30), y: Math.sin(angle) * 80 + 60, opacity: 0, rotate: i * 40, scale: 1 }}
+            transition={{ duration: 0.9, ease: "easeOut" }}
+            className={`absolute start-14 size-3 border-2 border-[var(--line)] ${colors[i % colors.length]} ${i % 2 ? "rounded-full" : "rounded-sm"}`}
+          />
+        );
+      })}
+    </div>
+  );
+}
 
 // Sign-in by phone: a code by SMS or WhatsApp, then straight in. A number
 // without an account can open one for its facility on the same screen.
@@ -43,6 +101,31 @@ export default function LoginPage() {
     if (step === "code") codeRef.current?.focus();
   }, [step]);
 
+  // Lensy's reactions: which field has focus, a shake on every error, a
+  // flash when the mascot is clicked, and a celebration on the way in.
+  const [focus, setFocus] = useState<"phone" | "code" | null>(null);
+  const [shakeKey, setShakeKey] = useState(0);
+  const [success, setSuccess] = useState(false);
+  const [photo, setPhoto] = useState<{ key: number; line: string } | null>(null);
+
+  useEffect(() => {
+    if (error) setShakeKey((k) => k + 1);
+  }, [error]);
+
+  useEffect(() => {
+    if (!photo?.line) return;
+    const t = setTimeout(() => setPhoto((p) => (p ? { ...p, line: "" } : p)), 2600);
+    return () => clearTimeout(t);
+  }, [photo?.key, photo?.line]);
+
+  function snap() {
+    const key = (photo?.key ?? 0) + 1;
+    setPhoto({ key, line: key >= 5 ? "خمس صور! خلاص، يكفي غرور." : PHOTO_LINES[Math.floor(Math.random() * PHOTO_LINES.length)] });
+  }
+
+  const digits = phone.replace(/\D/g, "").length;
+  const buddy = buddyState({ step, focus, digits, code: code.length, busy, error, success, photo: photo?.line });
+
   const fail = (e: unknown, fallback: string) => setError(e instanceof ApiError && e.status < 500 ? e.message : fallback);
 
   async function requestCode(e?: React.FormEvent) {
@@ -65,7 +148,10 @@ export default function LoginPage() {
 
   function enter(token: string) {
     setToken(token);
-    router.replace("/");
+    setSuccess(true);
+    // A beat for the celebration; none when motion is reduced.
+    const wait = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 900;
+    setTimeout(() => router.replace("/"), wait);
   }
 
   async function verify(e?: React.FormEvent) {
@@ -151,7 +237,11 @@ export default function LoginPage() {
 
         <div className="relative">
           <div className="relative mx-auto w-fit">
-            <Mascot size={190} follow />
+            <button type="button" onClick={snap} aria-label="التقط صورة مع لنزي" className="group block rounded-full cursor-pointer transition-transform hover:-rotate-3 active:scale-95">
+              <span key={shakeKey} className={shakeKey ? "shake block" : "block"}>
+                <Mascot size={190} mood={buddy.mood} look={buddy.look} follow />
+              </span>
+            </button>
             <span className="bob absolute -top-4 -start-24 rounded-2xl bg-sun-400 text-ink-900 border-2 border-[var(--line)] px-3 py-1.5 text-sm font-bold shadow-[var(--pop-sm)]" style={{ ["--r" as string]: "-6deg" }}>
               الامتثال 91%
             </span>
@@ -180,13 +270,37 @@ export default function LoginPage() {
             <Mascot size={44} /> <span className="font-display text-2xl font-extrabold">Camera</span>
           </div>
 
-          <div className="card p-6 sm:p-8">
+          <div className="card p-6 sm:p-8 relative">
+            {/* Lensy sits on the card and comments on what you do. */}
+            <div className="flex items-end gap-3 mb-6 min-h-[76px]">
+              <button type="button" onClick={snap} aria-label="التقط صورة مع لنزي" className="shrink-0 rounded-2xl cursor-pointer transition-transform hover:-rotate-6 active:scale-90">
+                <span key={shakeKey} className={shakeKey ? "shake block" : "block"}>
+                  <Mascot size={68} mood={buddy.mood} look={buddy.look} />
+                </span>
+              </button>
+              <AnimatePresence mode="wait">
+                <motion.p
+                  key={buddy.line}
+                  initial={{ opacity: 0, y: 6, scale: 0.92 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ type: "spring", stiffness: 520, damping: 26 }}
+                  aria-live="polite"
+                  className="relative mb-3 rounded-2xl rounded-es-sm border-2 border-[var(--line)] bg-sun-100 dark:bg-[var(--surface-2)] px-3 py-2 text-sm font-semibold leading-snug shadow-[var(--pop-sm)]"
+                >
+                  {buddy.line}
+                </motion.p>
+              </AnimatePresence>
+            </div>
+
             {/* Three dots that show where the person is in the sign-in. */}
             <ol className="flex items-center gap-2 mb-6" aria-label={`الخطوة ${stepNo} من 3`}>
               {[1, 2, 3].map((n) => (
                 <li key={n} className={`h-2.5 rounded-full border-2 border-[var(--line)] transition-all duration-300 ${n === stepNo ? "w-10 bg-sun-400" : n < stepNo ? "w-2.5 bg-brand-400" : "w-2.5 bg-[var(--surface-2)]"}`} />
               ))}
             </ol>
+            {success && <Confetti />}
+            {photo?.line && <div key={photo.key} className="camera-flash" aria-hidden />}
 
             <AnimatePresence mode="wait">
               {step === "phone" && (
@@ -202,12 +316,23 @@ export default function LoginPage() {
                       inputMode="tel"
                       autoComplete="tel"
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
+                      onChange={(e) => {
+                        setPhone(e.target.value);
+                        setError(null);
+                      }}
+                      onFocus={() => setFocus("phone")}
+                      onBlur={() => setFocus(null)}
                       className={`${field} text-xl tracking-wider font-mono`}
                       placeholder="05xxxxxxxx"
                       required
                       autoFocus
                     />
+                    {/* A film strip that fills up as the number is typed. */}
+                    <span className="mt-2 flex gap-1" aria-hidden>
+                      {Array.from({ length: 10 }, (_, i) => (
+                        <span key={i} className={`h-2 flex-1 rounded-sm border-[1.5px] border-[var(--card-line)] transition-colors duration-200 ${i < digits ? (digits >= 10 ? "bg-brand-400" : "bg-sun-400") : "bg-[var(--surface-2)]"}`} />
+                      ))}
+                    </span>
                   </label>
                   <fieldset>
                     <legend className="text-sm font-semibold mb-1.5">أرسل الرمز عبر</legend>
@@ -251,7 +376,12 @@ export default function LoginPage() {
                       pattern="[0-9]{6}"
                       maxLength={6}
                       value={code}
-                      onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      onChange={(e) => {
+                        setCode(e.target.value.replace(/\D/g, "").slice(0, 6));
+                        setError(null);
+                      }}
+                      onFocus={() => setFocus("code")}
+                      onBlur={() => setFocus(null)}
                       className="input w-full text-center text-4xl tracking-[0.45em] font-mono py-3"
                       placeholder="••••••"
                       required
@@ -260,7 +390,10 @@ export default function LoginPage() {
                   {devCode && (
                     <p className="text-sm rounded-2xl bg-sun-100 text-sun-700 border-2 border-dashed border-sun-400 px-3 py-2 dark:bg-sun-400/10 dark:text-sun-300">
                       بيئة تطوير بلا مرسل رسائل. الرمز:{" "}
-                      <button type="button" className="font-mono font-bold underline" onClick={() => setCode(devCode)}>{devCode}</button>
+                      <button type="button" className="font-mono font-bold underline" onClick={() => {
+                          setCode(devCode);
+                          setError(null);
+                        }}>{devCode}</button>
                     </p>
                   )}
                   {errorLine}

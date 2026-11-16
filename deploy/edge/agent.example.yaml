@@ -21,6 +21,8 @@ frigate:
   detector: openvino
 
 go2rtc_url: http://frigate:1984
+# On-device image embedder for search by description (ai/embedder).
+embedder_url: http://embedder:8000/embed-image
 recordings_path: /media/frigate
 profiles_dir: /etc/camera/profiles
 retention_days: 90
