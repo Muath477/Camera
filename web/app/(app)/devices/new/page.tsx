@@ -3,13 +3,19 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Check, Cpu, Loader2, MapPin, Plus, QrCode, RadioTower, Video } from "lucide-react";
+import { Check, Cpu, Loader2, MapPin, Plus, QrCode, RadioTower, Video, Wifi } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import { Button, PageHeader } from "@/components/ui";
 import { api, type Site } from "@/lib/api";
 import { useApi } from "@/lib/hooks";
 
-type Found = { host: string; vendor?: string; model?: string; name?: string; profile_id?: string };
+type Found = { host: string; vendor?: string; model?: string; name?: string; profile_id?: string; method?: "onvif" | "scan" | "manual"; rtsp_port?: number };
+
+// The two networks most home and shop routers hand out.
+const COMMON_NETS = ["192.168.1.0/24", "192.168.0.0/24"];
+const IPV4 = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
+
+const METHOD_LABEL: Record<string, string> = { onvif: "ONVIF", scan: "شبكة البيت", manual: "أضفتها يدوياً" };
 
 const STEPS = [
   { id: 0, title: "ربط الجهاز", icon: QrCode },
@@ -30,6 +36,30 @@ export default function NewDevicePage() {
   const [creds, setCreds] = useState<Record<string, { name: string; username: string; password: string; zone: string; selected: boolean }>>({});
   const [added, setAdded] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [subnet, setSubnet] = useState("");
+  const [scanned, setScanned] = useState<string[]>([]);
+  const [manualHost, setManualHost] = useState("");
+
+  const blankCreds = (f: Found, i: number) => ({ name: f.name?.replace(/[^a-zA-Z0-9_-]/g, "") || `cam${i + 1}`, username: "admin", password: "", zone: "", selected: true });
+
+  function addManual(e: React.FormEvent) {
+    e.preventDefault();
+    const host = manualHost.trim();
+    if (!IPV4.test(host)) {
+      setError("اكتب عنوان الكاميرا مثل 192.168.1.64");
+      return;
+    }
+    setError(null);
+    if (found.some((f) => f.host === host)) {
+      setManualHost("");
+      return;
+    }
+    const f: Found = { host, method: "manual", profile_id: "generic" };
+    setFound((l) => [...l, f]);
+    setCreds((c) => ({ ...c, [host]: blankCreds(f, found.length) }));
+    setManualHost("");
+    setStep(2);
+  }
 
   async function claim(e: React.FormEvent) {
     e.preventDefault();
@@ -50,14 +80,16 @@ export default function NewDevicePage() {
     setBusy(true);
     setError(null);
     try {
-      const r = await api<{ cameras: Found[] | null }>(`/v1/devices/${deviceId}/discover`, { method: "POST" });
-      const list = r.cameras ?? [];
+      const r = await api<{ cameras: Found[] | null; subnets?: string[] }>(`/v1/devices/${deviceId}/discover`, {
+        method: "POST",
+        body: JSON.stringify(subnet.trim() ? { subnet: subnet.trim() } : {}),
+      });
+      // Keep cameras added by hand across a second scan.
+      const manual = found.filter((f) => f.method === "manual");
+      const list = [...(r.cameras ?? []), ...manual.filter((m) => !(r.cameras ?? []).some((c) => c.host === m.host))];
       setFound(list);
-      setCreds(
-        Object.fromEntries(
-          list.map((f, i) => [f.host, { name: f.name?.replace(/[^a-zA-Z0-9_-]/g, "") || `cam${i + 1}`, username: "admin", password: "", zone: "", selected: true }]),
-        ),
-      );
+      setScanned(r.subnets ?? []);
+      setCreds(Object.fromEntries(list.map((f, i) => [f.host, creds[f.host] ?? blankCreds(f, i)])));
       setStep(2);
     } catch (err) {
       setError(err instanceof Error ? err.message : "الجهاز لم يجب. تأكد أنه موصول بالكهرباء والإنترنت.");
@@ -166,21 +198,52 @@ export default function NewDevicePage() {
               <RadioTower className="size-9" />
             </motion.div>
             <div>
-              <div className="font-semibold">تم ربط الجهاز</div>
-              <p className="muted text-sm mt-1">وصّل الكاميرات بمنفذ الشبكة الثاني على الجهاز، ثم اضغط اكتشاف. سيمسح الجهاز شبكته المحلية ويعرض ما وجده مع العلامة والطراز.</p>
+              <div className="font-display text-xl font-bold">تم ربط الجهاز</div>
+              <p className="muted text-sm mt-1 max-w-lg mx-auto">
+                يكتشف الجهاز الكاميرات الموصولة بمنفذه الثاني، وأي كاميرا على شبكة البيت أو المحل نفسها (موصولة بالراوتر أو بالواي فاي)، حتى التي لا تدعم ONVIF.
+              </p>
             </div>
-            {error && <p className="text-sm text-bad-500">{error}</p>}
-            <Button loading={busy} onClick={discover} icon={RadioTower}>اكتشاف الكاميرات</Button>
+            <div className="panel p-4 text-start space-y-2 max-w-lg mx-auto">
+              <label className="block text-sm">
+                <span className="font-semibold flex items-center gap-1.5"><Wifi className="size-4" /> شبكة البيت أو المحل (اختياري)</span>
+                <input
+                  dir="ltr"
+                  value={subnet}
+                  onChange={(e) => setSubnet(e.target.value)}
+                  placeholder="192.168.1.0/24"
+                  inputMode="decimal"
+                  className="input w-full mt-1.5 font-mono"
+                  aria-describedby="subnet-hint"
+                />
+              </label>
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span id="subnet-hint" className="muted">أول ثلاثة أرقام من عنوان جوالك أو جهازك على الواي فاي. الشائع:</span>
+                {COMMON_NETS.map((n) => (
+                  <button key={n} type="button" aria-pressed={subnet === n} onClick={() => setSubnet(n)} className={`rounded-full border-2 px-2.5 min-h-8 font-mono transition-all ${subnet === n ? "bg-sun-400 text-ink-900 border-[var(--line)]" : "border-[var(--border-strong)] hover:border-[var(--line)]"}`} dir="ltr">
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {error && <p role="alert" className="text-sm text-bad-600 dark:text-pop-400">{error}</p>}
+            <Button loading={busy} onClick={discover} icon={RadioTower}>{busy ? "نفحص الشبكة…" : "اكتشف الكاميرات"}</Button>
+            <ManualAdd value={manualHost} onChange={setManualHost} onSubmit={addManual} />
           </motion.div>
         )}
 
         {step === 2 && (
           <motion.div key="add" initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 16 }} className="space-y-3">
+            {scanned.length > 0 && (
+              <p className="muted text-xs flex flex-wrap items-center gap-1.5">
+                <Wifi className="size-3.5" /> فُحصت الشبكات:
+                {scanned.map((n) => <bdi key={n} dir="ltr" className="font-mono">{n}</bdi>)}
+              </p>
+            )}
             {found.length === 0 && (
               <div className="card p-5 text-center">
-                <div className="font-semibold">لم تُكتشف كاميرات</div>
-                <p className="muted text-sm mt-1">تأكد من توصيل الكاميرات بالمنفذ الصحيح. تقدر تضيفها يدوياً لاحقاً بمسار RTSP.</p>
-                <Button variant="secondary" className="mt-3" onClick={discover} loading={busy}>إعادة المحاولة</Button>
+                <div className="font-display text-lg font-bold">لم نجد كاميرات بعد</div>
+                <p className="muted text-sm mt-1">تأكد أن الكاميرا تعمل وموصولة بالراوتر نفسه أو بمنفذ الجهاز، أو اكتب شبكة البيت ثم افحص مرة ثانية. وتقدر تضيفها بعنوانها مباشرة.</p>
+                <Button variant="secondary" className="mt-3" onClick={() => setStep(1)}>ارجع للفحص</Button>
               </div>
             )}
             {found.map((f, i) => {
@@ -191,9 +254,10 @@ export default function NewDevicePage() {
                     <input type="checkbox" checked={c.selected} onChange={(e) => setCreds({ ...creds, [f.host]: { ...c, selected: e.target.checked } })} className="size-4 accent-brand-600" />
                     <div className="flex-1 min-w-0">
                       <div className="font-medium">{[f.vendor, f.model].filter(Boolean).join(" ") || "كاميرا"}</div>
-                      <div className="muted text-xs font-mono" dir="ltr">{f.host}{f.profile_id ? ` · profile ${f.profile_id}` : ""}</div>
+                      <div className="muted text-xs font-mono" dir="ltr">{f.host}{f.rtsp_port && f.rtsp_port !== 554 ? `:${f.rtsp_port}` : ""}{f.profile_id ? ` · profile ${f.profile_id}` : ""}</div>
                     </div>
-                    {f.profile_id && f.profile_id !== "generic" && <span className="text-xs text-brand-700 bg-brand-100 dark:bg-brand-900/50 dark:text-brand-300 rounded-full px-2 py-0.5">مختبرة معنا</span>}
+                    {f.method && <span className="text-xs font-semibold rounded-full border-[1.5px] border-aqua-400 bg-aqua-100 text-aqua-700 dark:bg-aqua-400/15 dark:text-aqua-400 px-2 py-0.5">{METHOD_LABEL[f.method]}</span>}
+                    {f.profile_id && f.profile_id !== "generic" && <span className="text-xs font-semibold text-brand-700 bg-brand-100 dark:bg-brand-900/50 dark:text-brand-300 rounded-full px-2 py-0.5">مختبرة معنا</span>}
                   </div>
                   <div className="grid sm:grid-cols-4 gap-2">
                     <input value={c.name} onChange={(e) => setCreds({ ...creds, [f.host]: { ...c, name: e.target.value } })} placeholder="الاسم (لاتيني)" dir="ltr" className="input" />
@@ -212,6 +276,8 @@ export default function NewDevicePage() {
                 </motion.div>
               );
             })}
+            <ManualAdd value={manualHost} onChange={setManualHost} onSubmit={addManual} />
+            {error && <p role="alert" className="text-sm text-bad-600 dark:text-pop-400">{error}</p>}
             {found.length > 0 && (
               <div className="flex items-center justify-between">
                 <p className="muted text-xs">كلمات المرور تُرسل إلى الجهاز وتُخزَّن مشفّرة عليه فقط.</p>
@@ -243,5 +309,19 @@ export default function NewDevicePage() {
         <div className="muted text-xs mt-3 flex items-center gap-2"><Loader2 className="size-3.5 animate-spin" /> الجهاز يضبط الكاميرات ويعيد تشغيل محرك التسجيل…</div>
       )}
     </div>
+  );
+}
+
+// ManualAdd adds a camera by its address when the scan cannot see it (a
+// camera on another router, or one that blocks the probe).
+function ManualAdd({ value, onChange, onSubmit }: { value: string; onChange: (v: string) => void; onSubmit: (e: React.FormEvent) => void }) {
+  return (
+    <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-2 justify-center text-start">
+      <label className="text-sm">
+        <span className="muted text-xs">كاميرا لم تظهر؟ أضفها بعنوانها</span>
+        <input dir="ltr" inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} placeholder="192.168.1.64" className="input mt-1 w-48 font-mono block" />
+      </label>
+      <Button type="submit" variant="secondary" icon={Plus}>أضف بالعنوان</Button>
+    </form>
   );
 }

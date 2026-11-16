@@ -11,6 +11,8 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"net/netip"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -197,9 +199,28 @@ func (h *Handler) discover(w http.ResponseWriter, r *http.Request) {
 		platform.Fail(w, r, platform.ErrForbidden)
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	// Optional: the network behind the site's router, so the device also
+	// scans the home or shop Wi-Fi, e.g. {"subnet": "192.168.1.0/24"}.
+	var in struct {
+		Subnet string `json:"subnet"`
+	}
+	if r.ContentLength > 0 {
+		if err := platform.Decode(r, &in); err != nil {
+			platform.Fail(w, r, platform.ErrBadInput)
+			return
+		}
+	}
+	var args map[string]any
+	if s := strings.TrimSpace(in.Subnet); s != "" {
+		if !validSubnet(s) {
+			platform.Fail(w, r, platform.Errorf(http.StatusBadRequest, "اكتب الشبكة مثل 192.168.1.0/24، ويجب أن تكون شبكة محلية"))
+			return
+		}
+		args = map[string]any{"subnet": s}
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
 	defer cancel()
-	ack, err := h.Cmd.Send(ctx, p.TenantID, d.ID, contract.CmdDiscover, nil)
+	ack, err := h.Cmd.Send(ctx, p.TenantID, d.ID, contract.CmdDiscover, args)
 	if err != nil {
 		platform.Fail(w, r, platform.Errorf(http.StatusGatewayTimeout, err.Error()))
 		return
@@ -209,6 +230,17 @@ func (h *Handler) discover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	platform.JSON(w, http.StatusOK, ack.Result)
+}
+
+// validSubnet accepts a private IPv4 network or address ("192.168.1.0/24",
+// "192.168.1.5"). The device checks again; this gives the person a clear
+// message before a round trip.
+func validSubnet(s string) bool {
+	if !strings.Contains(s, "/") {
+		s += "/24"
+	}
+	p, err := netip.ParsePrefix(s)
+	return err == nil && p.Addr().Is4() && p.Addr().IsPrivate()
 }
 
 // IngestHealth stores a device's health report and camera states.

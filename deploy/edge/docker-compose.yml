@@ -23,8 +23,10 @@ services:
         target: /tmp/cache
         tmpfs: { size: 1000000000 }
     # Port 5000 has no authentication: it is never published, only the
-    # agent reaches it on the internal network.
-    networks: [internal, cameras]
+    # agent reaches it on the internal network. "uplink" lets Frigate pull
+    # streams from cameras plugged into the site's router (home or shop
+    # Wi-Fi) as well as those on the camera port; it publishes no ports.
+    networks: [internal, cameras, uplink]
 
   agent:
     image: ghcr.io/muath477/camera-edge-agent:latest

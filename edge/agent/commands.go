@@ -117,13 +117,24 @@ func (a *Agent) runCommand(ctx context.Context, cmd contract.Command) (map[strin
 		return nil, nil
 
 	case contract.CmdDiscover:
-		dctx, cancel := context.WithTimeout(ctx, 4*time.Second)
-		defer cancel()
-		found, err := Discover(dctx, args.str("interface_addr"), a.profiles)
+		// The agent's own networks, the configured home networks, and one
+		// the person typed in the app (e.g. their router's 192.168.0.x).
+		subnets, err := ParseSubnets(append(append([]string{}, a.cfg.HomeSubnets...), args.str("subnet")))
 		if err != nil {
 			return nil, err
 		}
-		return map[string]any{"cameras": found}, nil
+		subnets = dedupe(append(LocalSubnets(), subnets...))
+		dctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		found, err := DiscoverAll(dctx, args.str("interface_addr"), subnets, a.profiles)
+		if err != nil {
+			return nil, err
+		}
+		nets := make([]string, len(subnets))
+		for i, s := range subnets {
+			nets[i] = s.String()
+		}
+		return map[string]any{"cameras": found, "subnets": nets}, nil
 
 	case contract.CmdThumbs:
 		minutes := args.num("minutes")

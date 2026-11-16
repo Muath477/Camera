@@ -30,6 +30,13 @@ type Config struct {
 
 	Go2RTCURL string `yaml:"go2rtc_url"` // http://go2rtc:1984
 
+	// HomeSubnets are the networks behind the site's router (home or shop
+	// Wi-Fi), e.g. ["192.168.1.0/24"]. Discovery scans them as well as the
+	// agent's own interfaces, so cameras plugged into the router are found,
+	// not only those on the device's camera port. Set by the installer
+	// because inside a container the agent cannot see the router's network.
+	HomeSubnets []string `yaml:"home_subnets"`
+
 	DataDir        string        `yaml:"data_dir"`        // outbox, camera store
 	RecordingsPath string        `yaml:"recordings_path"` // dedicated recordings disk
 	ProfilesDir    string        `yaml:"profiles_dir"`
@@ -68,6 +75,9 @@ func LoadConfig(path string) (*Config, error) {
 	}
 	if cfg.Cloud.BrokerURL == "" {
 		return nil, fmt.Errorf("cloud.broker_url is required")
+	}
+	if _, err := ParseSubnets(cfg.HomeSubnets); err != nil {
+		return nil, fmt.Errorf("home_subnets: %w", err)
 	}
 	return cfg, nil
 }

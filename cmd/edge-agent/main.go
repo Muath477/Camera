@@ -3,12 +3,14 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/Muath477/Camera/edge/agent"
 )
@@ -16,9 +18,20 @@ import (
 func main() {
 	configPath := flag.String("config", "/etc/camera/agent.yaml", "agent configuration file")
 	renderOnly := flag.Bool("render-frigate", false, "print the generated Frigate config and exit")
+	scan := flag.Bool("scan", false, "find cameras on this machine's networks (and -subnet), print them as JSON and exit")
+	subnet := flag.String("subnet", "", "extra network for -scan, e.g. 192.168.1.0/24")
+	profilesDir := flag.String("profiles", "/etc/camera/profiles", "vendor profiles for -scan")
 	flag.Parse()
 
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+
+	if *scan {
+		if err := scanOnly(*subnet, *profilesDir); err != nil {
+			log.Error("scan", "err", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	cfg, err := agent.LoadConfig(*configPath)
 	if err != nil {
@@ -46,6 +59,30 @@ func main() {
 		log.Error("run", "err", err)
 		os.Exit(1)
 	}
+}
+
+// scanOnly runs discovery without a config or a cloud connection, so an
+// installer can check from a laptop which cameras the site's network has.
+func scanOnly(subnet, profilesDir string) error {
+	extra, err := agent.ParseSubnets([]string{subnet})
+	if err != nil {
+		return err
+	}
+	profiles, _ := agent.LoadProfiles(profilesDir) // optional: vendors still show without it
+	subnets := append(agent.LocalSubnets(), extra...)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	found, err := agent.DiscoverAll(ctx, "", subnets, profiles)
+	if err != nil {
+		return err
+	}
+	nets := make([]string, len(subnets))
+	for i, s := range subnets {
+		nets[i] = s.String()
+	}
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(map[string]any{"subnets": nets, "cameras": found})
 }
 
 func renderFrigate(cfg *agent.Config) error {
