@@ -26,6 +26,28 @@ func TestNormalizePhone(t *testing.T) {
 	}
 }
 
+func TestRegisterTicket(t *testing.T) {
+	h := &Handler{Secret: []byte("test-secret-test-secret-test-secret")}
+	ticket, err := h.registerTicket("+966500000000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.checkTicket(ticket, "+966500000000"); err != nil {
+		t.Errorf("valid ticket refused: %v", err)
+	}
+	if h.checkTicket(ticket, "+966500000001") == nil {
+		t.Error("ticket accepted for another phone")
+	}
+	other := &Handler{Secret: []byte("another-secret-another-secret-xx")}
+	if other.checkTicket(ticket, "+966500000000") == nil {
+		t.Error("ticket accepted under another key")
+	}
+	session, _ := h.Token("dev-owner", "11111111-1111-4111-8111-111111111111")
+	if h.checkTicket(session, "+966500000000") == nil {
+		t.Error("a session token was accepted as a registration ticket")
+	}
+}
+
 func TestCodeHashIsBoundToPhone(t *testing.T) {
 	if hashCode("+966500000000", "123456") == hashCode("+966500000001", "123456") {
 		t.Error("the same code must hash differently for different phones")

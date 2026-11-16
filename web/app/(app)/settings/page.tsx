@@ -131,7 +131,7 @@ export default function SettingsPage() {
           <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="card p-5 space-y-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="font-semibold flex items-center gap-2"><Vibrate className="size-4 text-brand-600" /> إشعارات هذا الجهاز</h2>
+                <h2 className="font-semibold flex items-center gap-2"><Vibrate className="size-4 text-brand-700 dark:text-brand-300" /> إشعارات هذا الجهاز</h2>
                 <p className="muted text-sm mt-1">
                   {subscribed === null ? "جارٍ الفحص…" : subscribed ? "هذا الجهاز يستقبل الإشعارات." : pushSupported() ? "فعّلها لتصلك التنبيهات الحرجة حتى والتطبيق مغلق." : "متصفحك لا يدعم الإشعارات. على iPhone ثبّت التطبيق على الشاشة الرئيسية أولاً."}
                 </p>

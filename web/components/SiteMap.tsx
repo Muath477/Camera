@@ -129,14 +129,20 @@ export default function SiteMap({ sites, cameras = [], critical, alerts = {}, on
           m = new maplibregl.Marker({ element: make(), ...opts }).setLngLat(lngLat).addTo(map);
           markers.current.set(key, m);
         } else {
-          m.setLngLat(lngLat);
           const el = m.getElement();
           const fresh = make();
+          // Keep MapLibre's own classes (they position the marker); losing
+          // them dropped markers out of place and blew the critical ring up
+          // to the size of the map.
+          const own = [...el.classList].filter((c) => c.startsWith("maplibregl-"));
           el.className = fresh.className;
+          el.classList.add(...own);
           el.title = fresh.title;
           el.style.cssText = fresh.style.cssText;
           if (fresh.innerHTML !== el.innerHTML) el.innerHTML = fresh.innerHTML;
           m.setDraggable(!!opts?.draggable);
+          // Set the position last: it rewrites the transform the style reset cleared.
+          m.setLngLat(lngLat);
         }
         return m;
       };
@@ -146,8 +152,10 @@ export default function SiteMap({ sites, cameras = [], critical, alerts = {}, on
         const health = s.cameras === 0 ? "empty" : s.cameras_online === s.cameras ? "ok" : "degraded";
         const m = upsert("s" + s.id, [s.lng, s.lat], () => {
           const el = document.createElement("div");
+          // No inline position: MapLibre's class makes the marker absolute,
+          // which also anchors the critical ring; an inline "relative" put
+          // the markers back in normal flow, each one pushed down by the last.
           el.className = `map-marker ${health} ${critical?.has(s.id) ? "critical" : ""}`;
-          el.style.position = "relative";
           el.title = s.name;
           el.onclick = () => cbs.current.onSelectSite?.(s.id);
           return el;
@@ -157,7 +165,7 @@ export default function SiteMap({ sites, cameras = [], critical, alerts = {}, on
       for (const c of placed) {
         const editing = editable?.cameraId === c.id;
         const alert = alerts[c.id];
-        const colour = editing ? "#3b82f6" : alert ? "#e11d48" : c.status === "online" ? "#0b7f58" : "#64748b";
+        const colour = editing ? "var(--color-aqua-400)" : alert ? "var(--color-bad-500)" : c.status === "online" ? "var(--color-brand-500)" : "var(--color-ink-400)";
         const m = upsert(
           "c" + c.id,
           [c.lng!, c.lat!],
