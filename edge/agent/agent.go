@@ -30,6 +30,7 @@ type Agent struct {
 	outbox   *Outbox
 	frigate  *Frigate
 	uploader *Uploader
+	embedder *Embedder // nil when no embedder runs on the device
 
 	cloud mqtt.Client
 	local mqtt.Client
@@ -66,6 +67,7 @@ func New(cfg *Config, log *slog.Logger) (*Agent, error) {
 		outbox:   outbox,
 		frigate:  NewFrigate(cfg.Frigate.URL),
 		uploader: NewUploader(cfg.Cloud.APIURL, tlsCfg),
+		embedder: NewEmbedder(cfg.EmbedderURL),
 		wake:     make(chan struct{}, 1),
 	}, nil
 }
@@ -219,13 +221,24 @@ func (a *Agent) onFrigateEvent(ctx context.Context) mqtt.MessageHandler {
 		if ev == nil {
 			return
 		}
-		if wantSnapshot && a.uploader.Enabled() {
+		if wantSnapshot && (a.uploader.Enabled() || a.embedder != nil) {
 			if img, err := a.frigate.EventSnapshot(ctx, ev.ID); err == nil {
-				key, err := a.uploader.Upload(ctx, "snapshot", ev.Camera, "image/jpeg", img)
-				if err != nil {
-					a.log.Warn("snapshot upload failed", "event", ev.ID, "err", err)
-				} else {
-					ev.SnapshotKey = key
+				if a.uploader.Enabled() {
+					key, err := a.uploader.Upload(ctx, "snapshot", ev.Camera, "image/jpeg", img)
+					if err != nil {
+						a.log.Warn("snapshot upload failed", "event", ev.ID, "err", err)
+					} else {
+						ev.SnapshotKey = key
+					}
+				}
+				// The vector that makes the event findable by description.
+				// Without it the event is still sent, just not searchable.
+				if a.embedder != nil {
+					if vec, err := a.embedder.EmbedImage(ctx, img); err != nil {
+						a.log.Warn("embedding failed", "event", ev.ID, "err", err)
+					} else {
+						ev.Embedding = vec
+					}
 				}
 			}
 		}
