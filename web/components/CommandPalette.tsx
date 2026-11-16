@@ -80,11 +80,11 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
               <button
                 onMouseEnter={() => setCursor(i)}
                 onClick={() => go(it)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 text-right text-sm ${i === cursor ? "bg-brand-50 dark:bg-brand-900/30" : ""}`}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 text-start text-sm ${i === cursor ? "bg-brand-50 dark:bg-brand-900/30" : ""}`}
               >
                 <it.icon className="size-4 muted shrink-0" />
                 <span className="truncate">{it.title}</span>
-                {it.hint && <span className="muted text-xs mr-auto truncate max-w-[40%]">{it.hint}</span>}
+                {it.hint && <span className="muted text-xs ms-auto truncate max-w-[40%]">{it.hint}</span>}
               </button>
             </li>
           ))}

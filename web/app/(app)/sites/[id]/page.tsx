@@ -82,7 +82,7 @@ export default function SitePage({ params }: { params: Promise<{ id: string }> }
                 ))}
               </ul>
               {failing.length > 0 && (
-                <div className="mt-3 rounded-lg bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300 text-xs p-3">
+                <div className="mt-3 rounded-lg bg-pop-100 dark:bg-pop-400/15 text-pop-700 dark:text-pop-400 text-xs p-3">
                   {failing.length} بند غير مستوفى. عالجه قبل التفتيش لتجنّب الغرامة.
                 </div>
               )}
@@ -100,7 +100,7 @@ export default function SitePage({ params }: { params: Promise<{ id: string }> }
       <section>
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold flex items-center gap-2"><Video className="size-4" /> الكاميرات ({cams.length})</h2>
-          <Link href="/cameras" className="text-sm text-brand-600 flex items-center gap-1 hover:underline">
+          <Link href="/cameras" className="text-sm text-brand-700 dark:text-brand-300 flex items-center gap-1 hover:underline">
             كل الكاميرات <ArrowLeft className="size-3.5" />
           </Link>
         </div>
@@ -129,7 +129,7 @@ export default function SitePage({ params }: { params: Promise<{ id: string }> }
         <section className="card p-4">
           <h2 className="font-semibold mb-3 flex items-center gap-2"><Cpu className="size-4" /> أجهزة التسجيل</h2>
           {siteDevices.length === 0 ? (
-            <p className="muted text-sm">لا يوجد جهاز مرتبط. <Link href="/devices/new" className="text-brand-600 underline">أضف جهازاً</Link></p>
+            <p className="muted text-sm">لا يوجد جهاز مرتبط. <Link href="/devices/new" className="text-brand-700 dark:text-brand-300 underline">أضف جهازاً</Link></p>
           ) : (
             <ul className="space-y-3">
               {siteDevices.map((d) => (

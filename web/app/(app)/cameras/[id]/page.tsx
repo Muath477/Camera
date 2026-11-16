@@ -217,7 +217,7 @@ export default function CameraPage({ params }: { params: Promise<{ id: string }>
               <motion.div key="info" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} className="card p-4 text-sm space-y-3">
                 <h3 className="font-semibold flex items-center gap-2"><CameraIcon className="size-4" /> البيانات</h3>
                 <dl className="grid grid-cols-2 gap-y-2 gap-x-3">
-                  <dt className="muted">المعرّف على الجهاز</dt><dd dir="ltr" className="text-left font-mono text-xs">{c.name}</dd>
+                  <dt className="muted">المعرّف على الجهاز</dt><dd dir="ltr" className="text-end font-mono text-xs">{c.name}</dd>
                   <dt className="muted">العلامة</dt><dd>{c.vendor || "—"}</dd>
                   <dt className="muted">الطراز</dt><dd>{c.model || "—"}</dd>
                   <dt className="muted">PTZ</dt><dd>{c.ptz ? "نعم" : "لا"}</dd>
@@ -225,7 +225,7 @@ export default function CameraPage({ params }: { params: Promise<{ id: string }>
                   <dt className="muted">المنطقة</dt><dd>{c.article2_zone ? ZONES[c.article2_zone] : "—"}</dd>
                 </dl>
                 <div className="flex items-start gap-2 rounded-lg surface-2 p-3 text-xs muted">
-                  <Shield className="size-4 shrink-0 text-brand-600" />
+                  <Shield className="size-4 shrink-0 text-brand-700 dark:text-brand-300" />
                   بيانات اعتماد هذه الكاميرا مشفّرة على جهاز الموقع ولا تُخزَّن في السحابة.
                 </div>
               </motion.div>

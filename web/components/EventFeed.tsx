@@ -47,7 +47,8 @@ export function EventRow({
   onSelect?: (ev: CameraEvent) => void;
 }) {
   const Icon = ICONS[ev.label] ?? Bell;
-  const tone = ev.severity === "critical" ? "text-bad-500 bg-rose-50 dark:bg-rose-900/30" : ev.severity === "warning" ? "text-warn-600 bg-amber-50 dark:bg-amber-900/30" : "text-ink-500 bg-ink-100 dark:bg-ink-800";
+  // Sticker chip per severity: coral acts now, sun looks soon, aqua is info.
+  const tone = ev.severity === "critical" ? "bg-pop-400 -rotate-6" : ev.severity === "warning" ? "bg-sun-400 rotate-3" : "bg-aqua-100 dark:bg-aqua-400";
   const selectable = !!onSelect && ackable(ev);
   return (
     <motion.li
@@ -64,7 +65,7 @@ export function EventRow({
           {selected && <Check className="size-3.5" />}
         </span>
       )}
-      <span className={`shrink-0 size-9 rounded-lg flex items-center justify-center ${tone}`}>
+      <span className={`shrink-0 size-10 rounded-xl border-2 border-[var(--line)] text-ink-900 flex items-center justify-center ${tone}`}>
         <Icon className="size-4" />
       </span>
       <div className="min-w-0 flex-1">
@@ -72,11 +73,11 @@ export function EventRow({
           <span className="font-medium truncate">{label(ev.label)}</span>
           {ev.score != null && <span className="muted text-xs">{Math.round(ev.score * 100)}%</span>}
           {!ev.end_time && ev.kind !== "system" && <span className="pulse-dot" title="مستمر" />}
-          {ev.acked_at && <Check className="size-3.5 text-brand-600" />}
+          {ev.acked_at && <Check className="size-3.5 text-brand-700 dark:text-brand-300" />}
         </div>
         <div className="muted text-xs truncate">
           {ev.camera_id ? (
-            <Link href={`/cameras/${ev.camera_id}`} onClick={(e) => e.stopPropagation()} className="hover:text-brand-600">{ev.camera_name}</Link>
+            <Link href={`/cameras/${ev.camera_id}`} onClick={(e) => e.stopPropagation()} className="hover:text-brand-700 dark:hover:text-brand-300">{ev.camera_name}</Link>
           ) : (
             ev.camera_name
           )}
@@ -90,7 +91,7 @@ export function EventRow({
           </div>
         )}
       </div>
-      <div className="text-left shrink-0">
+      <div className="text-end shrink-0">
         <time className="muted text-xs block" title={fmtTime(ev.time)}>
           {fmtRelative(ev.time)}
         </time>
@@ -102,11 +103,11 @@ export function EventRow({
             e.stopPropagation();
             onAck(ev);
           }}
-          className="shrink-0 size-8 rounded-lg border border-[var(--border)] hover:bg-brand-50 hover:border-brand-300 dark:hover:bg-brand-900/30 flex items-center justify-center"
+          className="group shrink-0 size-10 rounded-full border-2 border-[var(--card-line)] bg-[var(--surface)] hover:bg-brand-400 hover:text-ink-900 hover:border-[var(--line)] transition-colors flex items-center justify-center"
           title="إقرار"
           aria-label="إقرار"
         >
-          <Check className="size-4" />
+          <Check className="size-4 wiggle" />
         </button>
       )}
     </motion.li>
@@ -147,7 +148,7 @@ export function EventList({
       });
     }
   };
-  if (events.length === 0) return <EmptyState icon={Bell} title="لا توجد أحداث" hint={emptyHint ?? "ستظهر الأحداث هنا فور رصدها من الكاميرات."} />;
+  if (events.length === 0) return <EmptyState icon={Bell} title="هدوء تام، لا أحداث" hint={emptyHint ?? "ستظهر الأحداث هنا لحظة رصدها من الكاميرات."} />;
   return (
     <ul>
       <AnimatePresence initial={false}>

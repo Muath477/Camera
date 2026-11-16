@@ -22,6 +22,21 @@ export const fmtTB = (n: number | null | undefined) => (n == null ? "—" : `${(
 
 export const fmtPercent = (n: number) => `${Math.round(n * 100)}%`;
 
+// countAR writes a count with the noun in the form Arabic grammar wants:
+// one, two (dual), 3 to 10 (plural), 11 and up (singular accusative).
+export function countAR(n: number, forms: { one: string; two: string; few: string; many: string }): string {
+  if (n === 1) return forms.one;
+  if (n === 2) return forms.two;
+  if (n >= 3 && n <= 10) return `${n} ${forms.few}`;
+  return `${n} ${forms.many}`;
+}
+
+export const alertsAR = (n: number) =>
+  countAR(n, { one: "تنبيه حرج واحد", two: "تنبيهان حرجان", few: "تنبيهات حرجة", many: "تنبيهاً حرجاً" });
+
+export const offlineCamsAR = (n: number) =>
+  countAR(n, { one: "كاميرا واحدة منقطعة", two: "كاميرتان منقطعتان", few: "كاميرات منقطعة", many: "كاميرا منقطعة" });
+
 // Day key in Riyadh time, used to group events.
 export function dayKey(iso: string): string {
   return new Intl.DateTimeFormat("en-CA", { ...riyadh, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso));
