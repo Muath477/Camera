@@ -150,7 +150,7 @@ func fakeFrame(cam, frame int) []byte {
 			img.Set(x, y, color.RGBA{c.R + n, c.G + n, c.B + n, 255})
 		}
 	}
-	px := (frame*14 + cam*70) % (w + 40) - 20
+	px := (frame*14+cam*70)%(w+40) - 20
 	for y := h/3 + 10; y < h*2/3+20; y++ {
 		for x := px; x < px+16; x++ {
 			if x >= 0 && x < w {
