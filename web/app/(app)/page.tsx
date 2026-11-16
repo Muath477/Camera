@@ -9,8 +9,9 @@ import { EventList } from "@/components/EventFeed";
 import { useLive } from "@/components/Live";
 import SiteMap from "@/components/SiteMap";
 import { Badge, Button, Counter, EmptyState, ErrorBox, Ring, Skeleton, Stat, fadeUp, stagger } from "@/components/ui";
-import { CATEGORIES, api, type Camera, type CameraEvent, type ComplianceReport, type Site } from "@/lib/api";
-import { fmtRelative } from "@/lib/format";
+import Mascot from "@/components/Mascot";
+import { CATEGORIES, api, type Camera, type CameraEvent, type ComplianceReport, type Me, type Site } from "@/lib/api";
+import { alertsAR, fmtRelative, offlineCamsAR } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 
 export default function Dashboard() {
@@ -18,6 +19,7 @@ export default function Dashboard() {
   const sites = useApi<{ items: Site[] | null }>("/v1/sites");
   const cameras = useApi<{ items: Camera[] | null }>("/v1/cameras");
   const recent = useApi<{ items: CameraEvent[] | null }>("/v1/events?limit=20");
+  const me = useApi<Me>("/v1/me");
   const live = useLive();
   const [feed, setFeed] = useState<CameraEvent[]>([]);
   const [reports, setReports] = useState<ComplianceReport[] | null>(null);
@@ -84,47 +86,70 @@ export default function Dashboard() {
 
   const loading = sites.loading && !sites.data;
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">نظرة عامة</h1>
-          <p className="muted text-sm mt-1">كل الفروع في شاشة واحدة، والأحداث تصلك فور رصدها.</p>
-        </div>
-        <Link href="/devices/new" className="hidden sm:block">
-          <Button icon={Plus} variant="secondary">إضافة جهاز</Button>
-        </Link>
-      </div>
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "صباح الخير" : "مساء الخير";
+  const firstName = me.data?.name.split(" ")[0];
+  const needsYou = unacked > 0 || offline > 0;
+  const mood = unacked > 0 ? "alert" : "happy";
+  const headline = unacked > 0 ? `عندك ${alertsAR(unacked)} بانتظار إقرارك` : offline > 0 ? `كل شيء تقريباً تمام، عدا ${offlineCamsAR(offline)}` : "كل شيء تمام، الكاميرات كلها تسجّل";
 
-      {!loading && siteList.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }} className="card divide-y sm:divide-y-0 sm:divide-x sm:divide-x-reverse divide-[var(--border)] grid sm:grid-cols-3">
-          <Link href="/compliance" className="flex items-center gap-3 px-4 py-3 hover:bg-[var(--surface-2)] rounded-t-[var(--radius)] sm:rounded-t-none sm:rounded-r-[var(--radius)]">
-            {avgScore === null ? <Skeleton className="size-11 rounded-full" /> : <Ring value={avgScore} size={44} stroke={5} />}
-            <div className="min-w-0">
-              <div className="font-semibold text-sm flex items-center gap-1.5"><ShieldCheck className="size-4 text-brand-600" /> جاهزية الامتثال</div>
-              <div className="muted text-xs truncate">{avgScore === null ? "جارٍ الفحص…" : avgScore >= 80 ? "جاهز للتفتيش في معظم الفروع" : "بنود تحتاج تصحيحاً قبل التفتيش"}</div>
-            </div>
+  return (
+    <div className="space-y-8">
+      {/* Greeting: the mascot's mood and one sentence say how things are. */}
+      <motion.section
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: "spring", stiffness: 300, damping: 28 }}
+        className="card relative overflow-hidden p-5 md:p-7"
+        aria-labelledby="dash-title"
+      >
+        <div className="flex flex-wrap md:flex-nowrap items-center gap-4 md:gap-5">
+          <Mascot size={92} mood={loading ? "happy" : mood} follow className="shrink-0 -rotate-3 size-16 md:size-[92px]" />
+          <div className="min-w-0 flex-1">
+            <p className="muted font-medium">
+              {greeting}
+              {firstName ? `، ${firstName}` : ""}
+            </p>
+            <h1 id="dash-title" className="text-3xl md:text-4xl font-extrabold mt-1">
+              {loading ? "نجهّز لك الصورة…" : <span className={needsYou ? "mark" : ""}>{headline}</span>}
+            </h1>
+            <p className="muted mt-2">كل الفروع في شاشة واحدة، والأحداث تصلك فور رصدها.</p>
+          </div>
+          <Link href="/devices/new" className="hidden sm:block shrink-0 self-start md:self-center">
+            <Button icon={Plus} variant="secondary">أضف جهاز تسجيل</Button>
           </Link>
-          <Link href="/cameras?status=offline" className="flex items-center gap-3 px-4 py-3 hover:bg-[var(--surface-2)]">
-            <span className={`size-11 rounded-full flex items-center justify-center shrink-0 ${offline > 0 ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" : "bg-brand-100 text-brand-700 dark:bg-brand-900/50 dark:text-brand-300"}`}>
-              <VideoOff className="size-5" />
-            </span>
-            <div className="min-w-0">
-              <div className="font-semibold text-sm"><Counter value={offline} /> كاميرا منقطعة الآن</div>
-              <div className="muted text-xs truncate">{offline > 0 ? "الإبلاغ عن العطل خلال المدة النظامية" : "كل الكاميرات تسجّل"}</div>
-            </div>
-          </Link>
-          <Link href="/events?severity=critical" className="flex items-center gap-3 px-4 py-3 hover:bg-[var(--surface-2)] rounded-b-[var(--radius)] sm:rounded-b-none sm:rounded-l-[var(--radius)]">
-            <span className={`size-11 rounded-full flex items-center justify-center shrink-0 ${unacked > 0 ? "bg-rose-100 text-rose-600 dark:bg-rose-900/40" : "bg-brand-100 text-brand-700 dark:bg-brand-900/50 dark:text-brand-300"}`}>
-              <BellRing className="size-5" />
-            </span>
-            <div className="min-w-0">
-              <div className="font-semibold text-sm"><Counter value={unacked} /> تنبيه حرج بانتظار التأكيد</div>
-              <div className="muted text-xs truncate">{unacked > 0 ? "أكّد الاستلام ليُسجَّل في سجل التدقيق" : "لا تنبيهات معلّقة"}</div>
-            </div>
-          </Link>
-        </motion.div>
-      )}
+        </div>
+
+        {!loading && siteList.length > 0 && (
+          <div className="mt-6 grid sm:grid-cols-3 gap-3">
+            <Link href="/compliance" className="group panel flex items-center gap-3 p-3 hover:bg-sun-100 dark:hover:bg-sun-400/10 transition-colors">
+              {avgScore === null ? <Skeleton className="size-12 rounded-full" /> : <Ring value={avgScore} size={48} stroke={6} />}
+              <div className="min-w-0">
+                <div className="font-bold text-sm flex items-center gap-1.5"><ShieldCheck className="size-4 wiggle" /> جاهزية الامتثال</div>
+                <div className="muted text-xs truncate">{avgScore === null ? "نفحص الفروع الآن…" : avgScore >= 80 ? "جاهز للتفتيش في معظم الفروع" : "بنود تحتاج تصحيحاً قبل التفتيش"}</div>
+              </div>
+            </Link>
+            <Link href="/cameras?status=offline" className="group panel flex items-center gap-3 p-3 hover:bg-aqua-100 dark:hover:bg-aqua-400/10 transition-colors">
+              <span className={`size-12 rounded-full border-2 border-[var(--line)] text-ink-900 flex items-center justify-center shrink-0 ${offline > 0 ? "bg-sun-400" : "bg-brand-400"}`}>
+                <VideoOff className="size-5 wiggle" />
+              </span>
+              <div className="min-w-0">
+                <div className="font-bold text-sm">كاميرات منقطعة الآن: <Counter value={offline} /></div>
+                <div className="muted text-xs truncate">{offline > 0 ? "بلّغ عن العطل خلال المدة النظامية" : "كل الكاميرات تسجّل"}</div>
+              </div>
+            </Link>
+            <Link href="/events?severity=critical" className="group panel flex items-center gap-3 p-3 hover:bg-pop-100 dark:hover:bg-pop-400/10 transition-colors">
+              <span className={`size-12 rounded-full border-2 border-[var(--line)] text-ink-900 flex items-center justify-center shrink-0 ${unacked > 0 ? "bg-pop-400" : "bg-brand-400"}`}>
+                <BellRing className="size-5 wiggle" />
+              </span>
+              <div className="min-w-0">
+                <div className="font-bold text-sm">تنبيهات بانتظار الإقرار: <Counter value={unacked} /></div>
+                <div className="muted text-xs truncate">{unacked > 0 ? "أقرّ بالاستلام ليُسجَّل في سجل التدقيق" : "لا تنبيهات معلّقة"}</div>
+              </div>
+            </Link>
+          </div>
+        )}
+      </motion.section>
 
       {loading ? (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -178,7 +203,7 @@ export default function Dashboard() {
           ) : (
             <>
               <SiteMap sites={siteList} cameras={camList} critical={criticalSites} alerts={alerts} onSelectSite={selectSite} onSelectCamera={selectCamera} />
-              <div className="absolute bottom-4 right-4 card px-3 py-2 text-xs flex items-center gap-3 shadow-[var(--shadow-md)]">
+              <div className="absolute bottom-4 start-4 card px-3 py-2 text-xs font-medium flex flex-wrap items-center gap-3">
                 <span className="flex items-center gap-1.5"><span className="map-marker ok !w-3 !h-3 !border" /> سليم</span>
                 <span className="flex items-center gap-1.5"><span className="map-marker degraded !w-3 !h-3 !border" /> كاميرا منقطعة</span>
                 <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm border border-dashed border-ink-400 bg-ink-200/50" /> بلا تسجيل</span>
@@ -190,11 +215,11 @@ export default function Dashboard() {
 
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.4 }} className="card p-4 flex flex-col">
           <div className="flex items-center justify-between mb-2">
-            <h2 className="font-semibold flex items-center gap-2">
-              <span className={`pulse-dot ${live.connected ? "" : "bad"}`} /> الأحداث المباشرة
+            <h2 className="text-xl font-extrabold flex items-center gap-2">
+              <span className={`pulse-dot ${live.connected ? "" : "bad"}`} /> يحدث الآن
             </h2>
-            <Link href="/events" className="text-sm text-brand-600 flex items-center gap-1 hover:underline">
-              الكل <ArrowLeft className="size-3.5" />
+            <Link href="/events" className="group min-h-11 px-2 text-sm font-semibold text-brand-700 dark:text-brand-300 flex items-center gap-1 hover:underline">
+              كل الأحداث <ArrowLeft className="size-4 transition-transform group-hover:-translate-x-1" />
             </Link>
           </div>
           <div className="max-h-[400px] overflow-y-auto -mx-1 px-1">
@@ -218,19 +243,24 @@ export default function Dashboard() {
       </div>
 
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.4 }}>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold">المواقع</h2>
-          <span className="muted text-xs">{siteList.length} موقع</span>
+        <div className="flex items-baseline justify-between mb-4">
+          <h2 className="text-2xl font-extrabold">
+            <span className="squiggle">فروعك</span>
+          </h2>
+          <span className="muted text-sm tabular-nums">{siteList.length} موقع</span>
         </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {siteList.map((s, i) => {
             const health = s.cameras === 0 ? "unknown" : s.cameras_online === s.cameras ? "online" : s.cameras_online === 0 ? "offline" : "warning";
             return (
               <motion.div key={s.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 * i }}>
-                <Link href={`/sites/${s.id}`} className="card card-hover p-4 block h-full">
+                <Link href={`/sites/${s.id}`} className="card card-hover group p-4 block h-full">
                   <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="font-semibold truncate">{s.name}</div>
+                    <span className={`shrink-0 size-11 rounded-xl border-2 border-[var(--line)] text-ink-900 flex items-center justify-center ${i % 2 ? "rotate-6" : "-rotate-6"} ${["bg-aqua-400", "bg-sun-400", "bg-lilac-400", "bg-brand-400"][i % 4]}`}>
+                      <Building2 className="size-5 wiggle" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-display text-lg font-bold truncate">{s.name}</div>
                       <div className="muted text-xs truncate">{CATEGORIES[s.facility_category] ?? s.facility_category} · {s.address}</div>
                     </div>
                     <Badge status={health} dot={criticalSites.has(s.id)}>
@@ -239,20 +269,20 @@ export default function Dashboard() {
                   </div>
                   <div className="mt-4 flex items-end justify-between">
                     <div>
-                      <div className="text-2xl font-bold leading-none">
+                      <div className="font-display text-3xl font-extrabold leading-none tabular-nums">
                         {s.cameras_online}
                         <span className="muted text-sm font-medium"> / {s.cameras}</span>
                       </div>
                       <div className="muted text-xs mt-1">كاميرا تعمل</div>
                     </div>
-                    <div className="text-left">
-                      <div className="text-sm font-medium">{s.retention_days_required} يوماً</div>
+                    <div className="text-end">
+                      <div className="text-sm font-bold">{s.retention_days_required} يوماً</div>
                       <div className="muted text-xs">الحفظ المطلوب</div>
                     </div>
                   </div>
-                  <div className="mt-3 h-1.5 rounded-full surface-2 overflow-hidden">
+                  <div className="mt-4 h-3 rounded-full border-2 border-[var(--card-line)] surface-2 overflow-hidden" role="img" aria-label={`${s.cameras_online} من ${s.cameras} كاميرا تعمل`}>
                     <motion.div
-                      className={`h-full rounded-full ${health === "online" ? "bg-brand-500" : health === "warning" ? "bg-warn-500" : "bg-bad-500"}`}
+                      className={`h-full rounded-full ${health === "online" ? "bg-brand-400" : health === "warning" ? "bg-sun-400" : "bg-pop-400"}`}
                       initial={{ width: 0 }}
                       animate={{ width: s.cameras ? `${(s.cameras_online / s.cameras) * 100}%` : "0%" }}
                       transition={{ duration: 0.8, delay: 0.2 + 0.05 * i, ease: [0.16, 1, 0.3, 1] }}

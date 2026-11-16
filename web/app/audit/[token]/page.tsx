@@ -33,7 +33,7 @@ export default function AuditorReport({ params }: { params: Promise<{ token: str
         <div className="text-4xl font-bold mt-2">{report.score}%</div>
         <a
           href={`${API_URL}/public/compliance/${token}/pdf`}
-          className="inline-flex items-center gap-1.5 mt-3 text-sm text-brand-600 hover:underline"
+          className="inline-flex items-center gap-1.5 mt-3 text-sm text-brand-700 dark:text-brand-300 hover:underline"
         >
           <FileDown className="size-4" /> تنزيل التقرير PDF
         </a>

@@ -80,11 +80,11 @@ export default function CompliancePage() {
           </motion.div>
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="card p-4">
             <div className="muted text-xs">جاهز للتفتيش</div>
-            <div className="text-3xl font-bold text-brand-600"><Counter value={ready} /><span className="muted text-base font-medium"> / {reports.length}</span></div>
+            <div className="text-3xl font-bold text-brand-700 dark:text-brand-300"><Counter value={ready} /><span className="muted text-base font-medium"> / {reports.length}</span></div>
           </motion.div>
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="card p-4">
             <div className="muted text-xs">بنود غير مستوفاة</div>
-            <div className={`text-3xl font-bold ${failing ? "text-bad-500" : "text-brand-600"}`}><Counter value={failing} /></div>
+            <div className={`text-3xl font-bold ${failing ? "text-bad-500" : "text-brand-700 dark:text-brand-300"}`}><Counter value={failing} /></div>
           </motion.div>
         </div>
       )}
@@ -98,7 +98,7 @@ export default function CompliancePage() {
           const warns = r.checks.filter((c) => c.status === "warn").length;
           return (
             <motion.div key={r.site_id} id={r.site_id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 * i }} className="card overflow-hidden">
-              <button onClick={() => setOpen(isOpen ? null : r.site_id)} className="w-full flex items-center gap-4 p-4 text-right">
+              <button onClick={() => setOpen(isOpen ? null : r.site_id)} className="w-full flex items-center gap-4 p-4 text-start">
                 <Ring value={r.score} size={56} stroke={6} />
                 <div className="min-w-0 flex-1">
                   <div className="font-semibold">{r.site_name}</div>
@@ -118,7 +118,7 @@ export default function CompliancePage() {
                       <ul className="divide-y divide-[var(--border)]">
                         {r.checks.map((c) => (
                           <li key={c.type} className="py-2.5 flex items-start gap-3">
-                            <span className={`mt-0.5 size-5 rounded-full flex items-center justify-center shrink-0 ${c.status === "pass" ? "bg-brand-100 text-brand-700" : c.status === "warn" ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"}`}>
+                            <span className={`mt-0.5 size-5 rounded-full flex items-center justify-center shrink-0 ${c.status === "pass" ? "bg-brand-100 text-brand-700" : c.status === "warn" ? "bg-sun-100 text-sun-700" : "bg-pop-100 text-pop-700"}`}>
                               {c.status === "pass" ? <Check className="size-3" /> : <span className="text-[10px] font-bold">!</span>}
                             </span>
                             <div className="flex-1 min-w-0">

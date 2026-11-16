@@ -138,7 +138,7 @@ export default function EventsPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [selecting, selectAll, exit, ackSelected, selected.size]);
 
-  const chip = "rounded-full px-3 py-1 text-xs font-medium border transition-colors";
+  const chip = "rounded-full min-h-9 px-3.5 py-1 text-sm font-semibold border-2 transition-all";
 
   return (
     <div>
@@ -163,10 +163,10 @@ export default function EventsPage() {
       >
         <div className="flex gap-2">
           <div className="relative flex-1">
-            <Search className="size-4 muted absolute right-3 top-1/2 -translate-y-1/2" />
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="ابحث بالوصف: شخص يحمل صندوقاً عند البوابة" className="input w-full pr-9" />
+            <Search className="size-4 muted absolute start-3.5 top-1/2 -translate-y-1/2" aria-hidden />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} aria-label="ابحث في الأحداث بالوصف" placeholder="ابحث بالوصف: شخص يحمل صندوقاً عند البوابة" className="input w-full ps-10" />
             {query && (
-              <button type="button" onClick={() => { setQuery(""); setSubmitted(""); }} className="absolute left-2 top-1/2 -translate-y-1/2 muted hover:text-current" aria-label="مسح">
+              <button type="button" onClick={() => { setQuery(""); setSubmitted(""); }} className="absolute end-1 top-1/2 -translate-y-1/2 size-9 rounded-full flex items-center justify-center muted hover:text-current hover:bg-[var(--surface-2)]" aria-label="امسح البحث">
                 <X className="size-4" />
               </button>
             )}
@@ -175,18 +175,18 @@ export default function EventsPage() {
         </div>
         <div className="flex flex-wrap gap-2 items-center">
           {SEVERITIES.map((s) => (
-            <button key={s.id} type="button" onClick={() => setSeverity(s.id)} className={`${chip} ${severity === s.id ? "bg-ink-900 text-white border-ink-900 dark:bg-white dark:text-ink-900 dark:border-white" : "border-[var(--border)] hover:border-[var(--border-strong)]"}`}>
+            <button key={s.id} type="button" aria-pressed={severity === s.id} onClick={() => setSeverity(s.id)} className={`${chip} ${severity === s.id ? "bg-sun-400 text-ink-900 border-[var(--line)] shadow-[var(--pop-sm)] -rotate-2" : "border-[var(--border-strong)] hover:border-[var(--line)]"}`}>
               {s.label}
             </button>
           ))}
           <span className="w-px h-5 bg-[var(--border)] mx-1" />
-          <select value={site} onChange={(e) => setSite(e.target.value)} className="input !py-1 text-xs">
+          <select value={site} onChange={(e) => setSite(e.target.value)} aria-label="الموقع" className="input !py-1.5 !text-sm">
             <option value="">كل المواقع</option>
             {(sites.data?.items ?? []).map((s) => (
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
           </select>
-          <select value={lbl} onChange={(e) => setLbl(e.target.value)} className="input !py-1 text-xs">
+          <select value={lbl} onChange={(e) => setLbl(e.target.value)} aria-label="التصنيف" className="input !py-1.5 !text-sm">
             <option value="">كل التصنيفات</option>
             {Object.entries(LABELS).map(([k, v]) => (
               <option key={k} value={k}>{v}</option>
@@ -222,7 +222,7 @@ export default function EventsPage() {
           <AnimatePresence initial={false}>
             {groups.map(([day, evs]) => (
               <motion.section key={day} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-5">
-                <h2 className="muted text-xs font-medium mb-2 sticky top-14 md:top-0 bg-[var(--bg)] py-1 z-10">
+                <h2 className="font-display text-base font-bold mb-2 sticky top-16 md:top-0 bg-[var(--bg)] py-1 z-10">
                   {fmtDay(evs[0].time)} · {evs.length}
                 </h2>
                 <div className="card px-4">
@@ -248,12 +248,12 @@ export default function EventsPage() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 24 }}
             transition={{ type: "spring", stiffness: 380, damping: 32 }}
-            className="fixed bottom-20 md:bottom-6 inset-x-3 md:inset-x-auto md:right-[calc(16rem+2rem)] md:left-8 z-40 card shadow-[var(--shadow-lg)] p-3 flex flex-col sm:flex-row sm:items-center gap-2"
+            className="fixed bottom-28 md:bottom-6 inset-x-3 md:inset-x-auto md:start-[calc(17rem+2rem)] md:end-8 z-40 card p-3 flex flex-col sm:flex-row sm:items-center gap-2"
           >
             <div className="flex items-center gap-2 text-sm shrink-0">
               <span className="font-semibold">{selected.size}</span>
               <span className="muted">محدد من {pending.length}</span>
-              <button type="button" onClick={selectAll} className="text-brand-600 text-xs hover:underline">
+              <button type="button" onClick={selectAll} className="text-brand-700 dark:text-brand-300 text-xs hover:underline">
                 تحديد الكل
               </button>
             </div>

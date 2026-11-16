@@ -20,10 +20,10 @@ const ToastCtx = createContext<Ctx>({ push: () => {}, dismiss: () => {} });
 export const useToast = () => useContext(ToastCtx);
 
 const icons = { info: Info, ok: CheckCircle2, critical: AlertTriangle };
-const tones = {
-  info: "border-[var(--border)]",
-  ok: "border-brand-300 dark:border-brand-800",
-  critical: "border-rose-300 dark:border-rose-900",
+const chips = {
+  info: "bg-aqua-400",
+  ok: "bg-brand-400",
+  critical: "bg-pop-400",
 };
 
 export function ToastProvider({ children }: { children: ReactNode }) {
@@ -44,7 +44,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastCtx.Provider value={value}>
       {children}
-      <div className="fixed bottom-20 md:bottom-6 left-4 z-[60] flex flex-col gap-2 w-[min(92vw,22rem)] pointer-events-none" dir="rtl">
+      <div role="status" aria-live="polite" className="fixed bottom-28 md:bottom-6 end-4 z-[60] flex flex-col gap-3 w-[min(92vw,22rem)] pointer-events-none" dir="rtl">
         <AnimatePresence initial={false}>
           {items.map((t) => {
             const Icon = icons[t.tone ?? "info"];
@@ -52,23 +52,25 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               <motion.div
                 key={t.id}
                 layout
-                initial={{ opacity: 0, x: -24, scale: 0.96 }}
-                animate={{ opacity: 1, x: 0, scale: 1 }}
-                exit={{ opacity: 0, x: -24, scale: 0.96 }}
-                transition={{ type: "spring", stiffness: 420, damping: 32 }}
-                className={`card pointer-events-auto p-3 flex items-start gap-3 border ${tones[t.tone ?? "info"]} shadow-[var(--shadow-lg)]`}
+                initial={{ opacity: 0, x: -40, rotate: -4, scale: 0.9 }}
+                animate={{ opacity: 1, x: 0, rotate: 0, scale: 1 }}
+                exit={{ opacity: 0, x: -40, scale: 0.9 }}
+                transition={{ type: "spring", stiffness: 480, damping: 24 }}
+                className="card pointer-events-auto p-3 flex items-start gap-3"
               >
-                <Icon className={`size-5 shrink-0 ${t.tone === "critical" ? "text-bad-500" : t.tone === "ok" ? "text-brand-600" : "text-info-500"}`} />
+                <span className={`size-9 shrink-0 rounded-xl border-2 border-[var(--line)] text-ink-900 flex items-center justify-center -rotate-6 ${chips[t.tone ?? "info"]}`}>
+                  <Icon className="size-5" />
+                </span>
                 <div className="min-w-0 flex-1">
-                  <div className="font-medium text-sm">{t.title}</div>
+                  <div className="font-bold text-sm">{t.title}</div>
                   {t.body && <div className="muted text-xs mt-0.5">{t.body}</div>}
                   {t.href && (
-                    <a href={t.href} className="text-xs text-brand-600 hover:underline mt-1 inline-block">
-                      فتح
+                    <a href={t.href} className="text-sm font-semibold text-brand-700 dark:text-brand-300 hover:underline mt-1 inline-block">
+                      افتح الحدث
                     </a>
                   )}
                 </div>
-                <button onClick={() => dismiss(t.id)} className="muted hover:text-current" aria-label="إغلاق">
+                <button onClick={() => dismiss(t.id)} className="muted hover:text-current size-9 -m-1 rounded-full hover:bg-[var(--surface-2)] flex items-center justify-center" aria-label="إغلاق التنبيه">
                   <X className="size-4" />
                 </button>
               </motion.div>

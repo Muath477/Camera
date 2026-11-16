@@ -4,6 +4,7 @@ import { motion, useReducedMotion } from "motion/react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ArrowLeft, Bell, Check, HardDrive, Map, Minus, Search, ShieldCheck, Video, X } from "lucide-react";
+import Mascot from "@/components/Mascot";
 import { Button, Reveal } from "@/components/ui";
 
 const FEATURES = [
@@ -34,7 +35,7 @@ const PLANS = [
 ];
 
 function Cell({ v }: { v: Cell }) {
-  if (v === true) return <Check className="size-5 text-brand-600 mx-auto" />;
+  if (v === true) return <Check className="size-5 text-brand-700 dark:text-brand-300 mx-auto" />;
   if (v === false) return <X className="size-4 text-ink-300 mx-auto" />;
   if (v === "partial") return <Minus className="size-4 text-warn-500 mx-auto" />;
   return <span className="text-xs whitespace-nowrap">{v}</span>;
@@ -92,13 +93,13 @@ function HeroVisual() {
           {events.map((e, i) => {
             const active = tick % 3 === i;
             return (
-              <motion.div key={e.t} animate={{ scale: active ? 1.04 : 1, opacity: active ? 1 : 0.6 }} className={`rounded-lg p-2 text-[11px] border ${e.s === "critical" ? "border-rose-300 bg-rose-50 dark:bg-rose-900/30 dark:border-rose-800" : "border-[var(--border)] surface-2"}`}>
+              <motion.div key={e.t} animate={{ scale: active ? 1.04 : 1, opacity: active ? 1 : 0.6 }} className={`rounded-lg p-2 text-[11px] border ${e.s === "critical" ? "border-pop-400 bg-pop-100 dark:bg-pop-400/15 dark:border-rose-800" : "border-[var(--border)] surface-2"}`}>
                 {e.t}
               </motion.div>
             );
           })}
           <div className="rounded-lg surface-2 p-2 text-center">
-            <div className="text-xl font-bold text-brand-600">91%</div>
+            <div className="text-xl font-bold text-brand-700 dark:text-brand-300">91%</div>
             <div className="muted text-[10px]">جاهزية الامتثال</div>
           </div>
         </div>
@@ -109,7 +110,7 @@ function HeroVisual() {
         transition={{ delay: 0.6 }}
         className="absolute -bottom-5 -left-3 card px-3 py-2 text-xs flex items-center gap-2 shadow-[var(--shadow-md)]"
       >
-        <span className="size-7 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center"><Bell className="size-3.5" /></span>
+        <span className="size-7 rounded-full bg-pop-100 text-pop-700 flex items-center justify-center"><Bell className="size-3.5" /></span>
         تنبيه على الجوال خلال 2 ثانية
       </motion.div>
     </div>
@@ -121,28 +122,27 @@ export default function Welcome() {
     <div className="min-h-screen">
       <header className="sticky top-0 z-30 backdrop-blur bg-[var(--bg)]/80 border-b border-[var(--border)]">
         <div className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
-          <Link href="/welcome" className="flex items-center gap-2 font-bold text-lg">
-            <span className="size-9 rounded-xl bg-brand-500 flex items-center justify-center"><Video className="size-5 text-white" /></span> Camera
+          <Link href="/welcome" className="flex items-center gap-2 rounded-xl">
+            <Mascot size={40} /> <span className="font-display font-extrabold text-xl">Camera</span>
           </Link>
-          <nav className="hidden md:flex items-center gap-6 text-sm">
-            <a href="#features" className="hover:text-brand-600">المزايا</a>
-            <a href="#how" className="hover:text-brand-600">كيف يعمل</a>
-            <a href="#compare" className="hover:text-brand-600">المقارنة</a>
-            <a href="#pricing" className="hover:text-brand-600">الأسعار</a>
+          <nav aria-label="أقسام الصفحة" className="hidden md:flex items-center gap-1 text-sm font-semibold">
+            {[["#features", "المزايا"], ["#how", "كيف يعمل"], ["#compare", "المقارنة"], ["#pricing", "الأسعار"]].map(([h, l]) => (
+              <a key={h} href={h} className="px-3 py-2 rounded-full hover:bg-sun-100 dark:hover:bg-[var(--surface-2)]">{l}</a>
+            ))}
           </nav>
-          <Link href="/login"><Button size="sm">دخول</Button></Link>
+          <Link href="/login"><Button size="sm" variant="secondary">ادخل</Button></Link>
         </div>
       </header>
 
       <section className="max-w-6xl mx-auto px-5 pt-16 pb-20 grid lg:grid-cols-2 gap-12 items-center">
         <div className="space-y-6">
-          <motion.span initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 dark:bg-brand-900/30 dark:border-brand-800 text-brand-700 dark:text-brand-300 px-3 py-1 text-xs font-medium">
-            <ShieldCheck className="size-3.5" /> متوافق مع نظام كاميرات المراقبة الأمنية
+          <motion.span initial={{ opacity: 0, y: 8, rotate: 0 }} animate={{ opacity: 1, y: 0, rotate: -2 }} className="inline-flex items-center gap-2 rounded-full border-2 border-[var(--line)] bg-brand-300 text-ink-900 px-3.5 py-1 text-sm font-bold shadow-[var(--pop-sm)]">
+            <ShieldCheck className="size-4" /> متوافق مع نظام كاميرات المراقبة الأمنية
           </motion.span>
-          <motion.h1 initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="text-4xl md:text-5xl font-bold leading-[1.2] tracking-tight">
+          <motion.h1 initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="text-5xl md:text-6xl font-extrabold leading-[1.15]">
             كاميراتك كلها في شاشة واحدة،
             <br />
-            <span className="text-brand-600">والامتثال محسوب</span> قبل ما يجيك المفتش.
+            <span className="mark">والامتثال محسوب</span> قبل ما يجيك المفتش.
           </motion.h1>
           <motion.p initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="muted text-lg max-w-xl">
             جهاز صغير في كل فرع يشتغل مع أي كاميرا عندك، يسجّل محلياً ويرسل لك الأحداث فقط. منصة عربية، بيانات داخل المملكة، وتقرير جاهزية لكل موقع.
@@ -152,9 +152,9 @@ export default function Welcome() {
             <a href="#how"><Button size="lg" variant="secondary">كيف يعمل <ArrowLeft className="size-4" /></Button></a>
           </motion.div>
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="flex gap-6 text-sm muted">
-            <span><b className="text-[var(--text)]">10 دقائق</b> للتفعيل</span>
-            <span><b className="text-[var(--text)]">أقل من ثانية</b> للبث الحي</span>
-            <span><b className="text-[var(--text)]">100%</b> داخل المملكة</span>
+            <span><b className="font-display text-lg text-[var(--text)]">10 دقائق</b> للتفعيل</span>
+            <span><b className="font-display text-lg text-[var(--text)]">أقل من ثانية</b> للبث الحي</span>
+            <span><b className="font-display text-lg text-[var(--text)]">100%</b> داخل المملكة</span>
           </motion.div>
         </div>
         <HeroVisual />
@@ -169,9 +169,9 @@ export default function Welcome() {
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
             {FEATURES.map((f, i) => (
               <Reveal key={f.title} delay={i * 0.06}>
-                <div className="card card-hover p-5 h-full">
-                  <span className="size-11 rounded-xl bg-brand-100 text-brand-700 dark:bg-brand-900/50 dark:text-brand-300 flex items-center justify-center mb-4"><f.icon className="size-5" /></span>
-                  <h3 className="font-semibold text-lg">{f.title}</h3>
+                <div className="card card-hover group p-5 h-full">
+                  <span className={`size-12 rounded-2xl border-2 border-[var(--line)] text-ink-900 flex items-center justify-center mb-4 ${i % 2 ? "rotate-6" : "-rotate-6"} ${["bg-sun-400", "bg-aqua-400", "bg-lilac-400", "bg-pop-400", "bg-brand-400", "bg-sun-300"][i]}`}><f.icon className="size-6 wiggle" /></span>
+                  <h3 className="font-bold text-xl">{f.title}</h3>
                   <p className="muted text-sm mt-1.5 leading-relaxed">{f.body}</p>
                 </div>
               </Reveal>
@@ -194,7 +194,7 @@ export default function Welcome() {
           ].map((s, i) => (
             <Reveal key={s.n} delay={i * 0.1}>
               <div className="text-center relative">
-                <motion.span whileHover={{ scale: 1.08 }} className="mx-auto size-16 rounded-2xl bg-[var(--surface)] border-2 border-brand-500 text-brand-700 text-2xl font-bold flex items-center justify-center relative z-10">
+                <motion.span whileHover={{ scale: 1.12, rotate: -8 }} className={`mx-auto size-16 rounded-2xl border-2 border-[var(--line)] text-ink-900 font-display text-3xl font-extrabold flex items-center justify-center relative z-10 shadow-[var(--pop)] ${["bg-brand-400 -rotate-6", "bg-sun-400 rotate-3", "bg-aqua-400 -rotate-3"][i]}`}>
                   {s.n}
                 </motion.span>
                 <h3 className="font-semibold text-lg mt-4">{s.t}</h3>
@@ -216,7 +216,7 @@ export default function Welcome() {
               <table className="w-full text-sm min-w-[760px]">
                 <thead>
                   <tr className="muted text-xs">
-                    <th className="p-3 text-right font-medium">المنصة</th>
+                    <th className="p-3 text-start font-medium">المنصة</th>
                     {COMPARE_COLS.map((c) => (
                       <th key={c} className="p-3 font-medium text-center">{c}</th>
                     ))}
@@ -237,7 +237,7 @@ export default function Welcome() {
                 </tbody>
               </table>
             </div>
-            <p className="muted text-xs mt-3 flex gap-4"><span className="flex items-center gap-1"><Check className="size-3.5 text-brand-600" /> متوفر</span><span className="flex items-center gap-1"><Minus className="size-3.5 text-warn-500" /> جزئي أو بشروط</span><span className="flex items-center gap-1"><X className="size-3.5 text-ink-300" /> غير متوفر</span></p>
+            <p className="muted text-xs mt-3 flex gap-4"><span className="flex items-center gap-1"><Check className="size-3.5 text-brand-700 dark:text-brand-300" /> متوفر</span><span className="flex items-center gap-1"><Minus className="size-3.5 text-warn-500" /> جزئي أو بشروط</span><span className="flex items-center gap-1"><X className="size-3.5 text-ink-300" /> غير متوفر</span></p>
           </Reveal>
         </div>
       </section>
@@ -250,8 +250,8 @@ export default function Welcome() {
         <div className="grid md:grid-cols-3 gap-5 items-stretch">
           {PLANS.map((p, i) => (
             <Reveal key={p.name} delay={i * 0.08}>
-              <div className={`card p-6 h-full flex flex-col relative ${p.highlight ? "border-brand-500 shadow-[0_0_0_4px_rgba(15,159,110,0.15)]" : ""}`}>
-                {p.highlight && <span className="absolute -top-3 right-5 text-xs bg-brand-600 text-white rounded-full px-3 py-1">الأكثر طلباً</span>}
+              <div className={`card p-6 h-full flex flex-col relative ${p.highlight ? "bg-brand-50 dark:bg-brand-900/30 rotate-[-1deg]" : ""}`}>
+                {p.highlight && <span className="absolute -top-4 start-5 text-sm font-bold bg-sun-400 text-ink-900 border-2 border-[var(--line)] rounded-full px-3 py-0.5 -rotate-3">الأكثر طلباً</span>}
                 <div className="font-semibold text-lg">{p.name}</div>
                 <div className="muted text-xs">{p.who}</div>
                 <div className="mt-4 flex items-baseline gap-1">
@@ -260,7 +260,7 @@ export default function Welcome() {
                 </div>
                 <ul className="mt-5 space-y-2 text-sm flex-1">
                   {p.items.map((it) => (
-                    <li key={it} className="flex gap-2"><Check className="size-4 text-brand-600 shrink-0 mt-0.5" /> {it}</li>
+                    <li key={it} className="flex gap-2"><Check className="size-4 text-brand-700 dark:text-brand-300 shrink-0 mt-0.5" /> {it}</li>
                   ))}
                 </ul>
                 <Link href="/login" className="mt-6"><Button variant={p.highlight ? "primary" : "secondary"} className="w-full">ابدأ</Button></Link>
@@ -273,9 +273,9 @@ export default function Welcome() {
 
       <footer className="border-t border-[var(--border)]">
         <div className="max-w-6xl mx-auto px-5 py-8 flex flex-col md:flex-row items-center justify-between gap-3 text-sm muted">
-          <span className="flex items-center gap-2 font-semibold text-[var(--text)]"><Video className="size-4 text-brand-600" /> Camera</span>
+          <span className="flex items-center gap-2 font-semibold text-[var(--text)]"><Video className="size-4 text-brand-700 dark:text-brand-300" /> Camera</span>
           <span>الحوسبة والتخزين والمفاتيح داخل المملكة العربية السعودية.</span>
-          <Link href="/login" className="hover:text-brand-600">دخول</Link>
+          <Link href="/login" className="hover:text-brand-700 dark:hover:text-brand-300">دخول</Link>
         </div>
       </footer>
     </div>
