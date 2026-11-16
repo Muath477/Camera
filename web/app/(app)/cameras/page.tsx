@@ -40,11 +40,11 @@ export default function CamerasPage() {
             <button
               type="button"
               onClick={() => setOnlyOffline((v) => !v)}
-              className={`h-10 px-3 rounded-lg border text-sm transition-colors ${onlyOffline ? "bg-amber-100 border-amber-300 text-amber-800 dark:bg-amber-900/40 dark:border-amber-700 dark:text-amber-200" : "border-[var(--border)] hover:border-[var(--border-strong)]"}`}
+              className={`h-10 px-3 rounded-lg border text-sm transition-colors ${onlyOffline ? "bg-sun-100 border-sun-400 text-sun-700 dark:bg-sun-400/15 dark:border-sun-400/40 dark:text-sun-300" : "border-[var(--border)] hover:border-[var(--border-strong)]"}`}
             >
               المنقطعة فقط{offline ? ` (${offline})` : ""}
             </button>
-            <select value={site} onChange={(e) => setSite(e.target.value)} className="input">
+            <select value={site} onChange={(e) => setSite(e.target.value)} aria-label="الموقع" className="input">
               <option value="">كل المواقع</option>
               {(sites.data?.items ?? []).map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>

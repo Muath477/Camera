@@ -102,7 +102,7 @@ export default function NewDevicePage() {
     <div className="max-w-3xl">
       <PageHeader crumbs={[{ href: "/devices", label: "الأجهزة" }]} title="إضافة جهاز تسجيل" subtitle="عشر دقائق من فتح الصندوق إلى أول كاميرا تعمل." />
 
-      <ol className="flex items-center gap-2 mb-6 overflow-x-auto">
+      <ol tabIndex={0} aria-label="خطوات إضافة الجهاز" className="flex items-center gap-2 mb-6 overflow-x-auto rounded-xl">
         {STEPS.map((s, i) => {
           const on = step === i;
           const done = step > i;

@@ -4,6 +4,7 @@ import { animate, motion, useInView, useReducedMotion } from "motion/react";
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Inbox, type LucideIcon } from "lucide-react";
+import Mascot from "../Mascot";
 
 /* ---------- Button ---------- */
 
@@ -15,22 +16,23 @@ type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 const variants = {
-  primary: "bg-brand-600 text-white hover:bg-brand-700 shadow-sm",
-  secondary: "bg-[var(--surface)] border border-[var(--border)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-2)]",
-  ghost: "hover:bg-[var(--surface-2)]",
-  danger: "bg-bad-500 text-white hover:bg-bad-600",
+  primary: "btn-pop bg-brand-500 text-ink-900 hover:bg-brand-400 font-bold",
+  secondary: "btn-pop bg-[var(--surface)] hover:bg-sun-100 dark:border-[var(--border-strong)] dark:hover:bg-[var(--surface-2)] font-semibold",
+  ghost: "hover:bg-[var(--surface-2)] font-medium",
+  danger: "btn-pop bg-bad-500 text-white hover:bg-bad-600 font-bold",
 };
 
-const sizes = { sm: "h-8 px-3 text-xs gap-1.5", md: "h-10 px-4 text-sm gap-2", lg: "h-12 px-6 text-base gap-2" };
+const sizes = { sm: "h-9 px-3.5 text-xs gap-1.5", md: "h-11 px-5 text-sm gap-2", lg: "h-12 px-7 text-base gap-2" };
 
 export function Button({ variant = "primary", size = "md", icon: Icon, loading, className = "", children, ...rest }: ButtonProps) {
   return (
     <button
       {...rest}
       disabled={rest.disabled || loading}
-      className={`inline-flex items-center justify-center rounded-[var(--radius-sm)] font-medium transition-[background,transform,box-shadow] duration-150 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none ${variants[variant]} ${sizes[size]} ${className}`}
+      aria-busy={loading || undefined}
+      className={`group inline-flex items-center justify-center rounded-full transition-colors duration-150 disabled:opacity-50 disabled:pointer-events-none ${variants[variant]} ${sizes[size]} ${className}`}
     >
-      {loading ? <Spinner /> : Icon ? <Icon className="size-4" /> : null}
+      {loading ? <Spinner /> : Icon ? <Icon className="size-4 wiggle" /> : null}
       {children}
     </button>
   );
@@ -47,18 +49,23 @@ export function Spinner({ className = "size-4" }: { className?: string }) {
 
 /* ---------- Badge ---------- */
 
+const OK = "bg-brand-100 text-brand-800 border-brand-300 dark:bg-brand-900/50 dark:text-brand-200 dark:border-brand-700";
+const WARN = "bg-sun-100 text-sun-700 border-sun-300 dark:bg-sun-400/15 dark:text-sun-300 dark:border-sun-400/40";
+const BAD = "bg-pop-100 text-pop-700 border-pop-400/60 dark:bg-pop-400/15 dark:text-pop-400 dark:border-pop-400/40";
+const IDLE = "bg-ink-100 text-ink-700 border-ink-200 dark:bg-ink-800 dark:text-ink-300 dark:border-ink-700";
+
 const STATUS_STYLE: Record<string, string> = {
-  pass: "bg-brand-100 text-brand-800 dark:bg-brand-900/50 dark:text-brand-300",
-  online: "bg-brand-100 text-brand-800 dark:bg-brand-900/50 dark:text-brand-300",
-  ok: "bg-brand-100 text-brand-800 dark:bg-brand-900/50 dark:text-brand-300",
-  warn: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
-  warning: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
-  pending: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
-  fail: "bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300",
-  offline: "bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300",
-  critical: "bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300",
-  info: "bg-ink-100 text-ink-700 dark:bg-ink-800 dark:text-ink-300",
-  unknown: "bg-ink-100 text-ink-700 dark:bg-ink-800 dark:text-ink-300",
+  pass: OK,
+  online: OK,
+  ok: OK,
+  warn: WARN,
+  warning: WARN,
+  pending: WARN,
+  fail: BAD,
+  offline: BAD,
+  critical: BAD,
+  info: IDLE,
+  unknown: IDLE,
 };
 
 const STATUS_AR: Record<string, string> = {
@@ -77,7 +84,7 @@ const STATUS_AR: Record<string, string> = {
 
 export function Badge({ status, children, dot }: { status: string; children?: ReactNode; dot?: boolean }) {
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap ${STATUS_STYLE[status] ?? STATUS_STYLE.info}`}>
+    <span className={`inline-flex items-center gap-1.5 rounded-full border-[1.5px] px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap ${STATUS_STYLE[status] ?? STATUS_STYLE.info}`}>
       {dot && <span className={`pulse-dot ${status === "critical" || status === "offline" || status === "fail" ? "bad" : ""}`} />}
       {children ?? STATUS_AR[status] ?? status}
     </span>
@@ -142,23 +149,23 @@ export function Stat({
   icon?: LucideIcon;
   href?: string;
 }) {
-  const color = tone === "bad" ? "text-bad-500" : tone === "warn" ? "text-warn-600" : tone === "ok" ? "text-brand-600" : "";
-  const iconBg = tone === "bad" ? "bg-rose-100 text-rose-600 dark:bg-rose-900/40" : tone === "warn" ? "bg-amber-100 text-amber-600 dark:bg-amber-900/40" : "bg-brand-100 text-brand-700 dark:bg-brand-900/50 dark:text-brand-300";
+  // Each tone gets its own sticker colour so the row reads at a glance.
+  const chip = tone === "bad" ? "bg-pop-400 text-ink-900" : tone === "warn" ? "bg-sun-400 text-ink-900" : tone === "ok" ? "bg-brand-400 text-ink-900" : "bg-aqua-400 text-ink-900";
   const body = (
-    <div className="card card-hover p-4 flex items-start gap-3 h-full">
+    <div className="card card-hover group p-4 h-full relative overflow-hidden">
       {Icon && (
-        <span className={`shrink-0 size-10 rounded-[var(--radius-sm)] flex items-center justify-center ${iconBg}`}>
-          <Icon className="size-5" />
+        <span className={`absolute top-3 end-3 size-10 rounded-xl border-2 border-[var(--line)] rotate-[-8deg] flex items-center justify-center ${chip}`}>
+          <Icon className="size-5 wiggle" />
         </span>
       )}
-      <div className="min-w-0">
-        <div className="muted text-sm">{title}</div>
-        <div className={`text-xl sm:text-2xl md:text-3xl font-bold mt-0.5 leading-tight ${color}`}>{value}</div>
-        {hint && <div className="muted text-xs mt-1 truncate">{hint}</div>}
+      <div className="min-w-0 pe-12">
+        <div className="muted text-sm font-medium">{title}</div>
       </div>
+      <div className="font-display text-3xl md:text-4xl font-extrabold mt-2 leading-none tabular-nums">{value}</div>
+      {hint && <div className="muted text-xs mt-2 truncate">{hint}</div>}
     </div>
   );
-  return href ? <Link href={href} className="block">{body}</Link> : body;
+  return href ? <Link href={href} className="block h-full rounded-[var(--radius-md)]">{body}</Link> : body;
 }
 
 /* ---------- Empty, error, loading ---------- */
@@ -170,10 +177,13 @@ export function EmptyState({ icon: Icon = Inbox, title, hint, action }: { icon?:
       animate={{ opacity: 1, y: 0 }}
       className="flex flex-col items-center justify-center text-center py-14 px-6 gap-2"
     >
-      <span className="size-14 rounded-full surface-2 flex items-center justify-center text-ink-400 mb-1">
-        <Icon className="size-7" />
+      <span className="relative mb-2">
+        <Mascot size={72} mood="sleepy" />
+        <span className="absolute -bottom-1 -end-2 size-8 rounded-full border-2 border-[var(--line)] bg-sun-300 text-ink-900 flex items-center justify-center rotate-12">
+          <Icon className="size-4" />
+        </span>
       </span>
-      <div className="font-semibold">{title}</div>
+      <div className="font-display text-lg font-bold">{title}</div>
       {hint && <div className="muted text-sm max-w-sm">{hint}</div>}
       {action && <div className="mt-3">{action}</div>}
     </motion.div>
@@ -182,9 +192,10 @@ export function EmptyState({ icon: Icon = Inbox, title, hint, action }: { icon?:
 
 export function ErrorBox({ error, retry }: { error: string; retry?: () => void }) {
   return (
-    <div className="card p-4 border-rose-200 dark:border-rose-900/60 flex items-center justify-between gap-3">
-      <div className="text-sm">
-        <div className="font-medium text-rose-600">تعذّر التحميل</div>
+    <div role="alert" className="card p-4 flex items-center justify-between gap-3">
+      <Mascot size={44} mood="alert" className="shrink-0" />
+      <div className="text-sm flex-1 min-w-0">
+        <div className="font-bold text-bad-600 dark:text-pop-400">تعذّر التحميل</div>
         <div className="muted text-xs" dir="auto">{error}</div>
       </div>
       {retry && (
@@ -208,20 +219,22 @@ export function Loading({ label = "جارٍ التحميل…" }: { label?: stri
 
 export function PageHeader({ title, subtitle, actions, crumbs }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode; crumbs?: { href: string; label: string }[] }) {
   return (
-    <div className="flex flex-wrap items-end justify-between gap-3 mb-6">
+    <div className="flex flex-wrap items-end justify-between gap-3 mb-8">
       <div className="min-w-0">
         {crumbs && (
-          <nav className="muted text-xs mb-1 flex items-center gap-1">
+          <nav aria-label="مسار التنقل" className="muted text-xs mb-1 flex items-center gap-1">
             {crumbs.map((c, i) => (
               <span key={c.href} className="flex items-center gap-1">
                 {i > 0 && <span>/</span>}
-                <Link href={c.href} className="hover:text-brand-600">{c.label}</Link>
+                <Link href={c.href} className="hover:text-brand-700 dark:hover:text-brand-300">{c.label}</Link>
               </span>
             ))}
           </nav>
         )}
-        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{title}</h1>
-        {subtitle && <p className="muted text-sm mt-1">{subtitle}</p>}
+        <h1 className="text-3xl md:text-4xl font-extrabold">
+          <span className="squiggle">{title}</span>
+        </h1>
+        {subtitle && <p className="muted text-sm mt-3">{subtitle}</p>}
       </div>
       {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
     </div>

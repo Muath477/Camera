@@ -253,7 +253,15 @@ func (h *Handler) verify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(accts) == 0 {
-		platform.JSON(w, http.StatusNotFound, map[string]any{"error": "no_account", "phone": phone})
+		// The code is spent, so hand back a short-lived ticket that proves
+		// this phone was just verified; register accepts it in place of a
+		// second code.
+		ticket, err := h.registerTicket(phone)
+		if err != nil {
+			platform.Fail(w, r, err)
+			return
+		}
+		platform.JSON(w, http.StatusNotFound, map[string]any{"error": "no_account", "phone": phone, "ticket": ticket})
 		return
 	}
 	// One code signs the person into every account their number holds; the
@@ -276,12 +284,42 @@ func (h *Handler) verify(w http.ResponseWriter, r *http.Request) {
 	platform.JSON(w, http.StatusOK, map[string]any{"token": accts[chosen].Token, "tenant_id": accts[chosen].TenantID, "accounts": accts})
 }
 
+// registerIssuer marks registration tickets. The session middleware accepts
+// only LocalIssuer, so a ticket can never be used to call the API.
+const (
+	registerIssuer    = "camera-register"
+	registerTicketTTL = 15 * time.Minute
+)
+
+func (h *Handler) registerTicket(phone string) (string, error) {
+	now := time.Now()
+	claims := jwt.MapClaims{"iss": registerIssuer, "phone": phone, "iat": now.Unix(), "exp": now.Add(registerTicketTTL).Unix()}
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(h.Secret)
+}
+
+// checkTicket reports whether ticket was signed by registerTicket for phone
+// and has not expired.
+func (h *Handler) checkTicket(ticket, phone string) error {
+	var c struct {
+		Phone string `json:"phone"`
+		jwt.RegisteredClaims
+	}
+	_, err := jwt.ParseWithClaims(ticket, &c, func(*jwt.Token) (any, error) { return h.Secret, nil },
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithIssuer(registerIssuer), jwt.WithExpirationRequired())
+	if err != nil || c.Phone != phone {
+		return errBadCode
+	}
+	return nil
+}
+
 // register creates a tenant with the caller as its owner. The phone must
-// have just been verified and must not belong to an account yet.
+// have just been verified (a fresh code, or the ticket verify handed back)
+// and must not belong to an account yet.
 func (h *Handler) register(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Phone      string `json:"phone"`
 		Code       string `json:"code"`
+		Ticket     string `json:"ticket"`
 		Name       string `json:"name"`
 		TenantName string `json:"tenant_name"`
 		CRNumber   string `json:"cr_number"`
@@ -296,7 +334,12 @@ func (h *Handler) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	if err := h.consume(ctx, phone, in.Code); err != nil {
+	if in.Ticket != "" {
+		err = h.checkTicket(in.Ticket, phone)
+	} else {
+		err = h.consume(ctx, phone, in.Code)
+	}
+	if err != nil {
 		platform.Fail(w, r, err)
 		return
 	}
