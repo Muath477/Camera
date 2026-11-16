@@ -24,7 +24,11 @@ export function setToken(token: string | null) {
 }
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(
+    public status: number,
+    message: string,
+    public body: Record<string, unknown> = {},
+  ) {
     super(message);
   }
 }
@@ -40,13 +44,18 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     },
   });
   if (res.status === 401) {
-    setToken(null);
-    if (typeof window !== "undefined" && !location.pathname.startsWith("/login")) location.href = "/login";
-    throw new ApiError(401, "unauthorized");
+    // On the sign-in page a 401 is a wrong or expired code, and the server's
+    // message says so in Arabic; elsewhere it means the session ended.
+    const body = await res.json().catch(() => ({}));
+    if (typeof window !== "undefined" && !location.pathname.startsWith("/login")) {
+      setToken(null);
+      location.href = "/login";
+    }
+    throw new ApiError(401, body.error ?? "unauthorized", body);
   }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new ApiError(res.status, body.error ?? res.statusText);
+    throw new ApiError(res.status, body.error ?? res.statusText, body);
   }
   if (res.status === 204) return undefined as T;
   return res.json();

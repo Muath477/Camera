@@ -4,14 +4,19 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"image"
+	"image/color"
+	"image/jpeg"
 	"log"
 	"math/rand/v2"
 	"os"
 	"os/signal"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -61,6 +66,20 @@ func main() {
 		return
 	}
 
+	// Rolling thumbnails, sent while the cloud has asked for them recently.
+	var thumbsUntil atomic.Int64
+	go func() {
+		for frame := 0; ; frame++ {
+			time.Sleep(5 * time.Second)
+			if time.Now().UnixNano() > thumbsUntil.Load() {
+				continue
+			}
+			for i, cam := range cameras {
+				publish(contract.KindThumbs, contract.Thumb{Camera: cam, At: time.Now().UTC(), JPEG: fakeFrame(i, frame)})
+			}
+		}
+	}()
+
 	c.Subscribe(topic(contract.KindCmd), 1, func(_ mqtt.Client, m mqtt.Message) {
 		var cmd contract.Command
 		if json.Unmarshal(m.Payload(), &cmd) != nil {
@@ -77,6 +96,9 @@ func main() {
 			ack.Result["cameras"] = []map[string]string{{"host": "192.168.50.31", "vendor": "hikvision", "model": "DS-2CD2143G2-I", "profile_id": "hikvision"}}
 		case contract.CmdWebRTCOffer:
 			ack.OK, ack.Error = false, "the simulator has no video"
+		case contract.CmdThumbs:
+			minutes, _ := cmd.Args["minutes"].(float64)
+			thumbsUntil.Store(time.Now().Add(time.Duration(max(minutes, 1) * float64(time.Minute))).UnixNano())
 		}
 		log.Printf("command %s", cmd.Type)
 		b, _ := json.Marshal(ack)
@@ -108,4 +130,35 @@ func main() {
 			event(labels[rand.IntN(len(labels))])
 		}
 	}
+}
+
+// fakeFrame draws a small stand-in camera picture: a wall and a floor in a
+// tint that differs per camera, and a figure that walks across over time.
+func fakeFrame(cam, frame int) []byte {
+	const w, h = 320, 180
+	tints := []color.RGBA{{70, 96, 120, 255}, {112, 86, 70, 255}, {72, 110, 90, 255}, {96, 80, 118, 255}}
+	wall := tints[cam%len(tints)]
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			c := wall
+			if y > h*2/3 {
+				c = color.RGBA{wall.R / 2, wall.G / 2, wall.B / 2, 255}
+			}
+			// A little sensor noise so it reads as video, not a flat fill.
+			n := uint8(rand.IntN(10))
+			img.Set(x, y, color.RGBA{c.R + n, c.G + n, c.B + n, 255})
+		}
+	}
+	px := (frame*14 + cam*70) % (w + 40) - 20
+	for y := h/3 + 10; y < h*2/3+20; y++ {
+		for x := px; x < px+16; x++ {
+			if x >= 0 && x < w {
+				img.Set(x, y, color.RGBA{30, 30, 36, 255})
+			}
+		}
+	}
+	var b bytes.Buffer
+	_ = jpeg.Encode(&b, img, &jpeg.Options{Quality: 70})
+	return b.Bytes()
 }
