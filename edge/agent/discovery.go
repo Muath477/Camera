@@ -11,14 +11,18 @@ import (
 	"time"
 )
 
-// Discovered is a camera found on the camera LAN by WS-Discovery.
+// Discovered is a camera found on the local network, by WS-Discovery
+// (Method "onvif") or by the port scan (Method "scan").
 type Discovered struct {
 	Host      string   `json:"host"`
-	XAddrs    []string `json:"xaddrs"`
+	XAddrs    []string `json:"xaddrs,omitempty"`
 	Vendor    string   `json:"vendor,omitempty"`
 	Model     string   `json:"model,omitempty"`
 	Name      string   `json:"name,omitempty"`
 	ProfileID string   `json:"profile_id,omitempty"`
+	Method    string   `json:"method,omitempty"`
+	RTSPPort  int      `json:"rtsp_port,omitempty"`
+	Ports     []int    `json:"ports,omitempty"`
 }
 
 const wsDiscoveryAddr = "239.255.255.250:3702"

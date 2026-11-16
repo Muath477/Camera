@@ -93,7 +93,20 @@ func main() {
 		case contract.CmdAddCamera:
 			ack.Result["profile_id"] = "hikvision"
 		case contract.CmdDiscover:
-			ack.Result["cameras"] = []map[string]string{{"host": "192.168.50.31", "vendor": "hikvision", "model": "DS-2CD2143G2-I", "profile_id": "hikvision"}}
+			// One camera on the device's camera port (ONVIF) and, when the app
+			// passed the home network, one behind the router found by the scan.
+			cams := []map[string]any{{"host": "192.168.50.31", "vendor": "hikvision", "model": "DS-2CD2143G2-I", "profile_id": "hikvision", "method": "onvif", "rtsp_port": 554}}
+			nets := []string{"192.168.50.0/24"}
+			if s, _ := cmd.Args["subnet"].(string); s != "" {
+				octets := strings.Split(strings.SplitN(s, "/", 2)[0], ".")
+				if len(octets) == 4 {
+					octets[3] = "64"
+				}
+				cams = append(cams, map[string]any{"host": strings.Join(octets, "."), "vendor": "tp-link", "profile_id": "tapo", "method": "scan", "rtsp_port": 554, "ports": []int{554, 2020}})
+				nets = append(nets, s)
+			}
+			ack.Result["cameras"] = cams
+			ack.Result["subnets"] = nets
 		case contract.CmdWebRTCOffer:
 			ack.OK, ack.Error = false, "the simulator has no video"
 		case contract.CmdThumbs:
@@ -150,7 +163,7 @@ func fakeFrame(cam, frame int) []byte {
 			img.Set(x, y, color.RGBA{c.R + n, c.G + n, c.B + n, 255})
 		}
 	}
-	px := (frame*14 + cam*70) % (w + 40) - 20
+	px := (frame*14+cam*70)%(w+40) - 20
 	for y := h/3 + 10; y < h*2/3+20; y++ {
 		for x := px; x < px+16; x++ {
 			if x >= 0 && x < w {
