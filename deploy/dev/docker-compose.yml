@@ -24,17 +24,20 @@ services:
     environment:
       EMQX_ALLOW_ANONYMOUS: "true"
 
+  # MinIO no longer publishes images on Docker Hub (minio/minio and minio/mc
+  # are gone), so the dev stack uses the frozen Bitnami builds of the same
+  # server and client.
   minio:
-    image: minio/minio:latest
-    command: server /data --console-address :9001
+    image: bitnamilegacy/minio:2025.7.23
     environment:
       MINIO_ROOT_USER: camera
       MINIO_ROOT_PASSWORD: camera-secret
+      MINIO_DEFAULT_BUCKETS: camera-media
     ports: ["9000:9000", "9001:9001"]
-    volumes: [minio:/data]
+    volumes: [minio:/bitnami/minio/data]
 
   minio-bucket:
-    image: minio/mc:latest
+    image: bitnamilegacy/minio-client:2025.7.21
     depends_on: [minio]
     entrypoint: >
       sh -c "until mc alias set local http://minio:9000 camera camera-secret; do sleep 1; done;
@@ -52,6 +55,9 @@ services:
 
   api:
     build: { context: ../.., args: { TARGET: api } }
+    # EMQX takes a while to accept connections on a cold start; the API
+    # gives up after its connect timeout, so start it again until it is in.
+    restart: on-failure
     depends_on:
       postgres: { condition: service_healthy }
       emqx: { condition: service_started }
@@ -67,6 +73,9 @@ services:
   seed:
     build: { context: ../.., args: { TARGET: api } }
     depends_on: [api]
+    # The API applies the migrations as it starts; until it has, the seed
+    # finds no tables and exits, so let it try again.
+    restart: on-failure
     command: ["seed"]
     environment:
       DATABASE_URL: postgres://camera_api:camera_api@postgres:5432/camera
