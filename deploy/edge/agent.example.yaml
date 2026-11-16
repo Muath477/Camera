@@ -1,6 +1,12 @@
 device_id: 00000000-0000-0000-0000-000000000000
 tenant_id: 00000000-0000-0000-0000-000000000000
 
+# Networks behind the site's router to search for cameras, besides the
+# camera port. Inside a container the agent cannot see them by itself.
+# Private ranges only; anything wider than /24 is narrowed to a /24.
+home_subnets:
+  - 192.168.1.0/24
+
 cloud:
   broker_url: ssl://mqtt.camera.sa:8883
   api_url: https://device-api.camera.sa
