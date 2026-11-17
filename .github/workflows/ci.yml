@@ -81,3 +81,28 @@ jobs:
           tags: |
             ghcr.io/${{ env.OWNER }}/camera-${{ matrix.target }}:${{ github.sha }}
             ghcr.io/${{ env.OWNER }}/camera-${{ matrix.target }}:latest
+
+  # The CLIP embedder the edge stack runs next to Frigate (ai/embedder).
+  embedder:
+    needs: [go, web]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Image owner must be lowercase
+        run: echo "OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ai/embedder
+          push: true
+          tags: |
+            ghcr.io/${{ env.OWNER }}/camera-embedder:${{ github.sha }}
+            ghcr.io/${{ env.OWNER }}/camera-embedder:latest

@@ -30,6 +30,11 @@ type Config struct {
 
 	Go2RTCURL string `yaml:"go2rtc_url"` // http://go2rtc:1984
 
+	// EmbedderURL is the on-device image embedder (ai/embedder), e.g.
+	// http://embedder:8000/embed-image. Empty turns off search by
+	// description for this site's events.
+	EmbedderURL string `yaml:"embedder_url"`
+
 	// HomeSubnets are the networks behind the site's router (home or shop
 	// Wi-Fi), e.g. ["192.168.1.0/24"]. Discovery scans them as well as the
 	// agent's own interfaces, so cameras plugged into the router are found,

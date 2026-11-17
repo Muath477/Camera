@@ -4,17 +4,15 @@
 package main
 
 import (
-	"bytes"
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"image"
-	"image/color"
-	"image/jpeg"
 	"log"
 	"math/rand/v2"
 	"os"
 	"os/signal"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -22,6 +20,7 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 
 	"github.com/Muath477/Camera/contract"
+	"github.com/Muath477/Camera/edge/agent"
 )
 
 func main() {
@@ -31,7 +30,17 @@ func main() {
 	cams := flag.String("cameras", "entrance,cashier", "comma separated camera names")
 	every := flag.Duration("every", 20*time.Second, "mean time between detections")
 	once := flag.String("once", "", "publish one event with this label and exit")
+	embedderURL := flag.String("embedder", "", "image embedder (ai/embedder) for search by description, e.g. http://embedder:8000/embed-image")
+	dump := flag.String("dump-scenes", "", "write -n sample frames per label to this folder (raw/<label>/*.jpg) and exit")
+	n := flag.Int("n", 40, "frames per label for -dump-scenes")
 	flag.Parse()
+	if *dump != "" {
+		if err := dumpScenes(*dump, *n); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+	embedder := agent.NewEmbedder(*embedderURL)
 	if *tenant == "" || *device == "" {
 		log.Fatal("-tenant and -device are required")
 	}
@@ -57,6 +66,21 @@ func main() {
 		end := start.Add(8 * time.Second)
 		ev := contract.Event{ID: fmt.Sprintf("%d.%d-sim", start.Unix(), rand.IntN(1e6)), Kind: kind, Camera: cam, Label: label,
 			Score: 0.6 + rand.Float64()*0.39, Zones: []string{cam}, StartTime: start, EndTime: &end}
+		// Like the real agent: embed the event's picture so it can be found
+		// by description. A third of the people carry a box.
+		if embedder != nil && kind == contract.EventObject {
+			what := label
+			if label == "person" && rand.IntN(3) == 0 {
+				what = "box"
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			if vec, err := embedder.EmbedImage(ctx, scene(what, slices.Index(cameras, cam))); err != nil {
+				log.Printf("embedding failed: %v", err)
+			} else {
+				ev.Embedding = vec
+			}
+			cancel()
+		}
 		publish(contract.KindEvents, ev)
 		log.Printf("event %s on %s", label, cam)
 	}
@@ -75,7 +99,7 @@ func main() {
 				continue
 			}
 			for i, cam := range cameras {
-				publish(contract.KindThumbs, contract.Thumb{Camera: cam, At: time.Now().UTC(), JPEG: fakeFrame(i, frame)})
+				publish(contract.KindThumbs, contract.Thumb{Camera: cam, At: time.Now().UTC(), JPEG: scene([]string{"person", "car", "person", "motorcycle"}[(i+frame/3)%4], i)})
 			}
 		}
 	}()
@@ -143,35 +167,4 @@ func main() {
 			event(labels[rand.IntN(len(labels))])
 		}
 	}
-}
-
-// fakeFrame draws a small stand-in camera picture: a wall and a floor in a
-// tint that differs per camera, and a figure that walks across over time.
-func fakeFrame(cam, frame int) []byte {
-	const w, h = 320, 180
-	tints := []color.RGBA{{70, 96, 120, 255}, {112, 86, 70, 255}, {72, 110, 90, 255}, {96, 80, 118, 255}}
-	wall := tints[cam%len(tints)]
-	img := image.NewRGBA(image.Rect(0, 0, w, h))
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
-			c := wall
-			if y > h*2/3 {
-				c = color.RGBA{wall.R / 2, wall.G / 2, wall.B / 2, 255}
-			}
-			// A little sensor noise so it reads as video, not a flat fill.
-			n := uint8(rand.IntN(10))
-			img.Set(x, y, color.RGBA{c.R + n, c.G + n, c.B + n, 255})
-		}
-	}
-	px := (frame*14+cam*70)%(w+40) - 20
-	for y := h/3 + 10; y < h*2/3+20; y++ {
-		for x := px; x < px+16; x++ {
-			if x >= 0 && x < w {
-				img.Set(x, y, color.RGBA{30, 30, 36, 255})
-			}
-		}
-	}
-	var b bytes.Buffer
-	_ = jpeg.Encode(&b, img, &jpeg.Options{Quality: 70})
-	return b.Bytes()
 }

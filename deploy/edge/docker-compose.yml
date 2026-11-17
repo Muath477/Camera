@@ -39,6 +39,13 @@ services:
       - /media/frigate:/media/frigate:ro
     networks: [internal, cameras, uplink]
 
+  # Turns event snapshots into CLIP vectors for search by description; the
+  # images stay on the device. Internal network only.
+  embedder:
+    image: ghcr.io/muath477/camera-embedder:latest
+    restart: unless-stopped
+    networks: [internal]
+
   caddy:
     image: caddy:2
     restart: unless-stopped
